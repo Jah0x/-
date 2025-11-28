@@ -21,6 +21,12 @@
 - Успех: `{ "node_id": int, "host": "string", "port": int, "method": "string|null", "password": "string|null", "region": "string|null", "access_key_id": "string|null", "access_url": "string|null" }`.
 - Ошибка: HTTP 503 с `{ "detail": "no_outline_nodes_available" }`, если нет активных нод, либо текстом ошибки провижининга Outline.
 
+### POST /api/v1/nodes/revoke-outline
+- Вход: `{ "device_id": "string" }`.
+- Логика: находит последний неотозванный Outline access-key для устройства, помечает его `revoked=true`, пытается вызвать удаление ключа через Outline API (ошибка удаления не фатальна).
+- Успех: `{ "revoked": true|false }` (false, если активных ключей не найдено).
+- Ошибка: HTTP 404 с `{ "detail": "device_not_found" }` при отсутствии устройства.
+
 ### POST /api/v1/usage/report
 - Вход: `{ "session_id": int|null, "device_id": "string", "bytes_up": int, "bytes_down": int }`
 - Действие: при наличии `session_id` увеличивает счётчики bytes_up/bytes_down сессии; иначе просто подтверждает приём.

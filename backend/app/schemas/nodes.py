@@ -15,3 +15,11 @@ class OutlineNodeAssignment(BaseModel):
     region: str | None = None
     access_key_id: str | None = None
     access_url: str | None = None
+
+
+class OutlineRevokeRequest(BaseModel):
+    device_id: str
+
+
+class OutlineRevokeResponse(BaseModel):
+    revoked: bool

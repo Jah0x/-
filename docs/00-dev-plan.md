@@ -19,9 +19,9 @@
 - Внешние зависимости: Go стандартная библиотека, gorilla/websocket, prometheus/client_golang, yaml.v3, uuid.
 
 ## Stage 3: Интеграция с Outline
-- Цель: подключить реальный Outline/Shadowsocks вместо заглушки.
-- Задачи: клиент Outline, маппинг сессий на Outline-ноды, обработка ошибок/фейловера, обновление протокола для указания ноды, тесты интеграции.
-- Затрагиваемые файлы: gateway/internal/upstream/*, gateway/internal/protocol/*, docs/03-httvps-protocol.md, docs/04-gateway-design.md, docs/05-outline-pool.md, docs/CHANGELOG.md.
+- Цель: подключить реальный Outline/Shadowsocks вместо заглушки с сохранением dev-режима.
+- Задачи: выбор upstream режима (fake/outline) в конфигурации gateway, запрос назначения Outline-ноды в backend с привязкой к сессии, реальный OutlineUpstream на базе Shadowsocks клиента, обработка ошибок/фейловера, обновление протокола и тестов.
+- Затрагиваемые файлы: backend (assign-outline из БД, схемы и тесты), gateway/internal/{config,protocol,upstream,nodes}, docs/00-05, docs/CHANGELOG.md, примеры конфигурации и docker-compose.
 - Внешние зависимости: Outline/Shadowsocks клиентские библиотеки.
 
 ## Stage 4: Мульти-gateway и пул Outline

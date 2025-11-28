@@ -6,14 +6,14 @@
 - Backend tracks both types, linking assignments and health data.
 
 ## Selection policies
-- Default: weighted round-robin within requested region.
-- Extensible: prefer nodes with lower load/latency based on heartbeat metrics; support geo and tag filters.
-- Fallback: if primary node unhealthy or overloaded, select next candidate and notify usage/audit logs.
+- Текущий алгоритм: поиск активных (`is_active=true`) нод в указанном регионе и выбор первой по возрастанию id. При отсутствии кандидатов в регионе берётся первая активная нода из всего пула.
+- Extensible: планируется добавить веса, метрики нагрузки/heartbeat и гибкие фильтры по тегам.
+- Fallback: при отсутствии активных нод backend отвечает ошибкой, gateway шлёт `outline_unavailable`.
 
 ## Heartbeat and healthcheck
 - Heartbeat payload (JSON): `node_id`, `region`, `uptime_sec`, `active_sessions`, `cpu_load`, `mem_load`, `bytes_up`, `bytes_down`, `last_error`, `timestamp`.
-- Gateways and Outline agents post to backend (`/gateway/heartbeat`, `/outline/heartbeat`); backend updates health tables and metrics.
-- Health thresholds configurable (timeouts, max load) and drive node availability in selection logic.
+- Gateways и Outline агенты отправляют `/gateway/heartbeat` и `/outline/heartbeat`; backend использует `node_id` для обновления `last_heartbeat_at` и признака активности.
+- Health thresholds будут расширены на следующем этапе, пока фильтрация основана на `is_active` и наличии heartbeat.
 
 ## Security of SS secrets
 - Store Outline access keys securely (env/secret manager/K8s secrets); avoid logging secrets.

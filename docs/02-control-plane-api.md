@@ -17,7 +17,9 @@
 
 ### POST /api/v1/nodes/assign-outline
 - Вход: `{ "device_id": "string", "region_code": "string|null" }`
-- Сейчас возвращает статический узел для разработки: `{ "host": "outline.example.com", "port": 12345, "method": "aes-256-gcm", "password": "placeholder", "region": "<region_code>" }`
+- Логика: ищет активные Outline-ноды в указанном регионе, при отсутствии — берёт любую активную ноду. Возвращает первую подходящую по возрастанию id.
+- Успех: `{ "node_id": int, "host": "string", "port": int, "method": "string|null", "password": "string|null", "region": "string|null" }`.
+- Ошибка: HTTP 503 с `{ "detail": "no_outline_nodes_available" }`, если нет активных нод.
 
 ### POST /api/v1/usage/report
 - Вход: `{ "session_id": int|null, "device_id": "string", "bytes_up": int, "bytes_down": int }`

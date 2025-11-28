@@ -18,8 +18,8 @@ Backend поднимается на `${BACKEND_PORT}` и использует Po
 
 ## Gateway (MVP)
 - HTTPS + WebSocket-туннель, JSON-фреймы по спецификации из `docs/03-httvps-protocol.md`.
-- Handshake через кадр `hello` и валидацию устройства в backend.
-- Поддержка кадров `stream_open` / `stream_data` / `stream_close`, эхо-upstream для разработки.
+- Handshake через кадр `hello`, валидацию устройства в backend и назначение Outline-ноды (режим `outline`).
+- Поддержка кадров `stream_open` / `stream_data` / `stream_close`; upstream выбирается конфигом `GATEWAY_UPSTREAM_MODE` (`fake` по умолчанию, `outline` для реального Shadowsocks).
 - Метрики Prometheus на `/metrics` при включённом флаге.
 
 ### Ручная проверка соединения
@@ -44,5 +44,6 @@ Backend поднимается на `${BACKEND_PORT}` и использует Po
 - Stage 0: инициализация репозитория (структура, окружение, базовые правила).
 - Stage 1: backend MVP (контрол-плейн, БД, аутентификация устройств).
 - Stage 2: gateway MVP (WebSocket-туннель, заглушка upstream, метрики).
+- Stage 3: интеграция с Outline (assign из backend, OutlineUpstream, переключаемый режим fake/outline).
 
 Подробнее: [docs/00-dev-plan.md](docs/00-dev-plan.md).

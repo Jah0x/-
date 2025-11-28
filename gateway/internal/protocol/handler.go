@@ -9,6 +9,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/httvps/httvps/gateway/internal/auth"
 	"github.com/httvps/httvps/gateway/internal/metrics"
+	"github.com/httvps/httvps/gateway/internal/nodes"
 	"github.com/httvps/httvps/gateway/internal/sessions"
 	"github.com/httvps/httvps/gateway/internal/upstream"
 	"golang.org/x/exp/slog"
@@ -18,12 +19,18 @@ type AuthClient interface {
 	ValidateDevice(ctx context.Context, req auth.ValidateDeviceRequest) (auth.ValidateDeviceResult, error)
 }
 
+type NodesClient interface {
+	AssignOutlineNode(ctx context.Context, req nodes.AssignOutlineRequest) (nodes.AssignOutlineResponse, error)
+}
+
 type Handler struct {
-	AuthClient AuthClient
-	Sessions   *sessions.Manager
-	Upstream   upstream.Upstream
-	Metrics    *metrics.Metrics
-	Logger     *slog.Logger
+	AuthClient   AuthClient
+	NodesClient  NodesClient
+	Sessions     *sessions.Manager
+	Upstream     upstream.Upstream
+	Metrics      *metrics.Metrics
+	Logger       *slog.Logger
+	UpstreamMode string
 }
 
 func (h *Handler) Handle(ctx context.Context, conn *websocket.Conn) {
@@ -76,19 +83,38 @@ func (h *Handler) Handle(ctx context.Context, conn *websocket.Conn) {
 		h.sendAuthResult(conn, AuthResultFrame{Type: FrameAuthResult, Allowed: false, Reason: authResult.Reason, SubscriptionStatus: authResult.SubscriptionStatus})
 		return
 	}
-	if h.Metrics != nil && h.Metrics.MetricsEnabled {
-		h.Metrics.HandshakeTotal.WithLabelValues("accepted").Inc()
+	var nodeConfig upstream.OutlineNodeConfig
+	if h.UpstreamMode == "outline" {
+		if h.NodesClient == nil {
+			h.sendError(conn, "outline_unavailable", "outline client not configured")
+			return
+		}
+		assignment, assignErr := h.NodesClient.AssignOutlineNode(ctx, nodes.AssignOutlineRequest{RegionCode: hello.Region, DeviceID: hello.DeviceID})
+		if assignErr != nil {
+			if h.Metrics != nil && h.Metrics.MetricsEnabled {
+				h.Metrics.HandshakeTotal.WithLabelValues("error").Inc()
+				h.Metrics.BackendErrors.WithLabelValues("assign_error").Inc()
+			}
+			h.sendError(conn, "outline_unavailable", "no_outline_nodes_available")
+			return
+		}
+		nodeConfig = upstream.OutlineNodeConfig{NodeID: assignment.NodeID, Host: assignment.Host, Port: assignment.Port, Method: assignment.Method, Password: assignment.Password, Region: assignment.Region}
 	}
 	session, err = h.Sessions.CreateSession(hello.DeviceID)
 	if err != nil {
 		h.sendError(conn, "session_error", "failed to create session")
 		return
 	}
+	if err := h.Upstream.BindSession(ctx, session.ID, nodeConfig); err != nil {
+		h.sendError(conn, "session_error", "failed to bind upstream")
+		return
+	}
 	if h.Metrics != nil && h.Metrics.MetricsEnabled {
 		h.Metrics.ActiveSessions.Set(float64(h.Sessions.ActiveSessions()))
+		h.Metrics.HandshakeTotal.WithLabelValues("accepted").Inc()
 	}
 	if h.Logger != nil {
-		h.Logger.Info("session_started", slog.String("device_id", hello.DeviceID), slog.String("session_id", session.ID))
+		h.Logger.Info("session_started", slog.String("device_id", hello.DeviceID), slog.String("session_id", session.ID), slog.String("region", nodeConfig.Region), slog.Int("node_id", nodeConfig.NodeID))
 	}
 	h.sendAuthResult(conn, AuthResultFrame{Type: FrameAuthResult, Allowed: true, SessionID: session.ID, SubscriptionStatus: authResult.SubscriptionStatus})
 	for {

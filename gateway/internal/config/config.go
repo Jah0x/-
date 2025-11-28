@@ -16,6 +16,7 @@ type Config struct {
 	TLSKeyPath           string
 	BackendBaseURL       string
 	BackendTimeout       time.Duration
+	UpstreamMode         string
 	LogLevel             string
 	LogFormat            string
 	MetricsEnabled       bool
@@ -29,6 +30,7 @@ type fileConfig struct {
 	TLSKeyPath           string        `yaml:"tls_key_path"`
 	BackendBaseURL       string        `yaml:"backend_base_url"`
 	BackendTimeout       time.Duration `yaml:"backend_timeout"`
+	UpstreamMode         string        `yaml:"upstream_mode"`
 	LogLevel             string        `yaml:"log_level"`
 	LogFormat            string        `yaml:"log_format"`
 	MetricsEnabled       *bool         `yaml:"metrics_enabled"`
@@ -40,6 +42,7 @@ func defaultConfig() Config {
 	return Config{
 		ListenAddr:           ":8443",
 		BackendTimeout:       5 * time.Second,
+		UpstreamMode:         "fake",
 		LogLevel:             "info",
 		LogFormat:            "json",
 		MetricsEnabled:       true,
@@ -100,6 +103,9 @@ func mergeFileConfig(cfg *Config, fc fileConfig) {
 	if fc.BackendTimeout != 0 {
 		cfg.BackendTimeout = fc.BackendTimeout
 	}
+	if fc.UpstreamMode != "" {
+		cfg.UpstreamMode = fc.UpstreamMode
+	}
 	if fc.LogLevel != "" {
 		cfg.LogLevel = fc.LogLevel
 	}
@@ -134,6 +140,9 @@ func applyEnv(cfg *Config) {
 		if duration, err := time.ParseDuration(value); err == nil {
 			cfg.BackendTimeout = duration
 		}
+	}
+	if value := strings.TrimSpace(os.Getenv("GATEWAY_UPSTREAM_MODE")); value != "" {
+		cfg.UpstreamMode = strings.ToLower(value)
 	}
 	if value := strings.TrimSpace(os.Getenv("GATEWAY_LOG_LEVEL")); value != "" {
 		cfg.LogLevel = strings.ToLower(value)

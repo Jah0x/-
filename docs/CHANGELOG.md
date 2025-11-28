@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0] - 2025-11-30
+### Added
+- Конфигурация gateway получила `upstream_mode` (fake/outline) и примеры в `.env.example`, `docker-compose.yml`, `config/example-config.yaml`.
+- В gateway реализованы OutlineUpstream на базе Shadowsocks, клиент assign-outline для backend и привязка сессий к конкретным Outline-нодам.
+- Backend endpoint `/api/v1/nodes/assign-outline` теперь читает ноды из БД, возвращает `node_id` и отдаёт ошибку 503 при отсутствии активных нод; добавлены тесты.
+- Обновлена документация: dev-plan Stage 3, архитектурный обзор, протокол, описание gateway и outline pool.
+
 ## [0.5.0] - 2025-11-29
 ### Added
 - Формализован поэтапный план разработки в `docs/00-dev-plan.md` и отражён в README.

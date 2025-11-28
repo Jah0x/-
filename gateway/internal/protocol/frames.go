@@ -4,7 +4,7 @@ type FrameType string
 
 const (
 	FrameHello       FrameType = "hello"
-	FrameAuthResult  FrameType = "auth_result"
+	FrameReady       FrameType = "ready"
 	FrameStreamOpen  FrameType = "stream_open"
 	FrameStreamData  FrameType = "stream_data"
 	FrameStreamClose FrameType = "stream_close"
@@ -18,20 +18,16 @@ type Envelope struct {
 }
 
 type HelloFrame struct {
-	Type          FrameType `json:"type"`
-	DeviceID      string    `json:"device_id"`
-	Token         string    `json:"token"`
-	ClientVersion string    `json:"client_version,omitempty"`
-	Capabilities  []string  `json:"capabilities,omitempty"`
-	Region        string    `json:"region,omitempty"`
+	Type         FrameType `json:"type"`
+	SessionToken string    `json:"session_token"`
+	Version      string    `json:"version"`
+	Client       string    `json:"client,omitempty"`
 }
 
-type AuthResultFrame struct {
-	Type               FrameType `json:"type"`
-	Allowed            bool      `json:"allowed"`
-	SessionID          string    `json:"session_id,omitempty"`
-	SubscriptionStatus string    `json:"subscription_status,omitempty"`
-	Reason             string    `json:"reason,omitempty"`
+type ReadyFrame struct {
+	Type       FrameType `json:"type"`
+	SessionID  string    `json:"session_id"`
+	MaxStreams int       `json:"max_streams"`
 }
 
 type StreamOpenFrame struct {

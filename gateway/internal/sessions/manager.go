@@ -14,10 +14,11 @@ type Stream struct {
 }
 
 type Session struct {
-	ID        string
-	DeviceID  string
-	StartedAt time.Time
-	Streams   map[string]Stream
+	ID         string
+	DeviceID   string
+	StartedAt  time.Time
+	Streams    map[string]Stream
+	MaxStreams int
 }
 
 type Manager struct {
@@ -30,12 +31,18 @@ func NewManager(maxStreams int) *Manager {
 	return &Manager{sessions: make(map[string]*Session), maxStreamsPerSession: maxStreams}
 }
 
-func (m *Manager) CreateSession(deviceID string) (*Session, error) {
+func (m *Manager) CreateSessionWithID(id string, deviceID string, maxStreams int) (*Session, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	id := uuid.NewString()
-	session := &Session{ID: id, DeviceID: deviceID, StartedAt: time.Now().UTC(), Streams: make(map[string]Stream)}
-	m.sessions[id] = session
+	sessionID := id
+	if sessionID == "" {
+		sessionID = uuid.NewString()
+	}
+	if _, exists := m.sessions[sessionID]; exists {
+		return nil, errors.New("session_exists")
+	}
+	session := &Session{ID: sessionID, DeviceID: deviceID, StartedAt: time.Now().UTC(), Streams: make(map[string]Stream), MaxStreams: maxStreams}
+	m.sessions[sessionID] = session
 	return session, nil
 }
 
@@ -62,7 +69,11 @@ func (m *Manager) OpenStream(sessionID string, streamID string) error {
 	if _, exists := session.Streams[streamID]; exists {
 		return errors.New("stream_exists")
 	}
-	if m.maxStreamsPerSession > 0 && len(session.Streams) >= m.maxStreamsPerSession {
+	limit := m.maxStreamsPerSession
+	if session.MaxStreams > 0 {
+		limit = session.MaxStreams
+	}
+	if limit > 0 && len(session.Streams) >= limit {
 		return errors.New("stream_limit")
 	}
 	session.Streams[streamID] = Stream{ID: streamID, CreatedAt: time.Now().UTC()}

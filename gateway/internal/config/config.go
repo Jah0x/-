@@ -15,6 +15,7 @@ type Config struct {
 	TLSCertPath          string
 	TLSKeyPath           string
 	BackendBaseURL       string
+	BackendSecret        string
 	BackendTimeout       time.Duration
 	UpstreamMode         string
 	LogLevel             string
@@ -29,6 +30,7 @@ type fileConfig struct {
 	TLSCertPath          string        `yaml:"tls_cert_path"`
 	TLSKeyPath           string        `yaml:"tls_key_path"`
 	BackendBaseURL       string        `yaml:"backend_base_url"`
+	BackendSecret        string        `yaml:"backend_secret"`
 	BackendTimeout       time.Duration `yaml:"backend_timeout"`
 	UpstreamMode         string        `yaml:"upstream_mode"`
 	LogLevel             string        `yaml:"log_level"`
@@ -100,6 +102,9 @@ func mergeFileConfig(cfg *Config, fc fileConfig) {
 	if fc.BackendBaseURL != "" {
 		cfg.BackendBaseURL = fc.BackendBaseURL
 	}
+	if fc.BackendSecret != "" {
+		cfg.BackendSecret = fc.BackendSecret
+	}
 	if fc.BackendTimeout != 0 {
 		cfg.BackendTimeout = fc.BackendTimeout
 	}
@@ -135,6 +140,9 @@ func applyEnv(cfg *Config) {
 	}
 	if value := strings.TrimSpace(os.Getenv("BACKEND_BASE_URL")); value != "" {
 		cfg.BackendBaseURL = value
+	}
+	if value := strings.TrimSpace(os.Getenv("BACKEND_GATEWAY_SECRET")); value != "" {
+		cfg.BackendSecret = value
 	}
 	if value := strings.TrimSpace(os.Getenv("BACKEND_TIMEOUT")); value != "" {
 		if duration, err := time.ParseDuration(value); err == nil {

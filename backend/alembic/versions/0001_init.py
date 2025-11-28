@@ -15,6 +15,7 @@ def upgrade() -> None:
         sa.Column("email", sa.String(length=255), nullable=False, unique=True),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default="true"),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=func.now()),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()),
     )
     op.create_table(
         "plans",
@@ -46,6 +47,7 @@ def upgrade() -> None:
         sa.Column("valid_until", sa.DateTime(timezone=True)),
         sa.Column("status", sa.String(length=32), nullable=False, server_default="inactive"),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=func.now()),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()),
     )
     op.create_table(
         "outline_nodes",
@@ -73,7 +75,7 @@ def upgrade() -> None:
         sa.Column("device_id", sa.Integer(), sa.ForeignKey("devices.id", ondelete="CASCADE"), nullable=False),
         sa.Column("outline_node_id", sa.Integer(), sa.ForeignKey("outline_nodes.id", ondelete="SET NULL")),
         sa.Column("gateway_node_id", sa.Integer(), sa.ForeignKey("gateway_nodes.id", ondelete="SET NULL")),
-        sa.Column("started_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("started_at", sa.DateTime(timezone=True), nullable=False, server_default=func.now()),
         sa.Column("ended_at", sa.DateTime(timezone=True)),
         sa.Column("bytes_up", sa.BigInteger(), nullable=False, server_default="0"),
         sa.Column("bytes_down", sa.BigInteger(), nullable=False, server_default="0"),

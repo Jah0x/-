@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0] - 2025-11-28
+### Added
+- Приведён к финалу Этап 0: шаблон `.env.example`, актуализированный `docker-compose.yml`, `Makefile` с базовыми целями, обновлённый README и Dockerfile backend для локального запуска.
+- Реализован Этап 1: FastAPI backend с конфигурацией, JSON-логированием, JWT-утилитами, асинхронным подключением к БД, миграцией Alembic и моделями пользователей, устройств, подписок, тарифов, регионов, gateway/Outline-нод и сессий.
+- Эндпоинты `/api/v1/health`, `/api/v1/auth/validate-device`, заглушка `/api/v1/nodes/assign-outline`, обработка `/api/v1/usage/report` и heartbeat `/api/v1/gateway/heartbeat`, `/api/v1/outline/heartbeat`.
+- Минимальные unit-тесты для healthcheck и валидации устройства.
+- Документация обновлена: архитектурный обзор и описание control-plane API отражают реализованную структуру.
+
 ## [0.3.0] - 2024-05-21
 ### Added
 - Backend MVP: FastAPI приложение с конфигурацией, JSON-логированием, JWT-утилитами и асинхронным подключением к БД.

@@ -1,10 +1,10 @@
 # Architecture Overview
 
 ## Компоненты
-- Backend (control plane): FastAPI + PostgreSQL, асинхронный SQLAlchemy, Alembic. Управляет пользователями, устройствами, подписками, регионами и реестром узлов, принимает heartbeat и usage-события.
-- Gateway (data plane): HTTPS/WebSocket терминатор, использует API backend для валидации устройств, ведёт сессии и проксирует потоки к upstream (в MVP — заглушка эхо).
-- Outline pool: набор Shadowsocks-нод, скрытых за gateway (будет подключён на следующих этапах).
-- Клиент: выполняет HTTVPS-handshake, запрашивает у backend валидность устройства и параметры узлов.
+- Backend (control plane): FastAPI + PostgreSQL, асинхронный SQLAlchemy, Alembic. Управляет пользователями, устройствами, подписками, регионами и реестром узлов, принимает heartbeat и usage-события, назначает Outline-ноды устройствам.
+- Gateway (data plane): HTTPS/WebSocket терминатор, использует API backend для валидации устройств, ведёт сессии и проксирует потоки к upstream. Upstream выбирается конфигурацией: `FakeUpstream` для dev или `OutlineUpstream` для реального Shadowsocks.
+- Outline pool: набор Shadowsocks-нод, скрытых за gateway, обновляется heartbeat-сообщениями и используется backend для назначения.
+- Клиент: выполняет HTTVPS-handshake, запрашивает у backend валидность устройства и выбирает регион.
 
 ## Backend слои и каталоги
 - `app/core`: конфигурация (`config.py`), подключение к БД (`database.py`), JWT-утилиты (`security.py`), JSON-логирование (`logging.py`).
@@ -17,19 +17,21 @@
 
 ## Gateway слои и каталоги
 - `cmd/httvps-gateway`: точка входа, сборка зависимостей и запуск сервера.
-- `internal/config`: загрузка конфигурации из env/YAML (`GATEWAY_LISTEN_ADDR`, пути до TLS, `BACKEND_BASE_URL`, таймауты, логирование, метрики, лимиты потоков).
+- `internal/config`: загрузка конфигурации из env/YAML (`GATEWAY_LISTEN_ADDR`, пути до TLS, `BACKEND_BASE_URL`, таймауты, логирование, метрики, лимиты потоков, `GATEWAY_UPSTREAM_MODE`).
 - `internal/server`: HTTPS + WebSocket сервер, маршруты `/ws` и `/metrics`.
-- `internal/protocol`: схемы кадров и обработчик сессии (handshake, stream_open/data/close, ping/pong).
+- `internal/protocol`: схемы кадров и обработчик сессии (handshake, stream_open/data/close, ping/pong, ошибки).
 - `internal/auth`: клиент backend `/api/v1/auth/validate-device`.
+- `internal/nodes`: клиент `/api/v1/nodes/assign-outline`.
 - `internal/sessions`: in-memory учёт сессий и потоков с ограничением `GATEWAY_MAX_STREAMS`.
-- `internal/upstream`: заглушка эхо для потоков (будет заменена на Outline-клиент).
+- `internal/upstream`: `FakeUpstream` для эхо/dev и `OutlineUpstream` для Shadowsocks соединений.
 - `internal/metrics`: Prometheus-метрики активных сессий/потоков, handshakes, трафика, ошибок backend.
 
 ## Потоки
 1. Device validation: клиент отправляет `hello` в gateway, который вызывает `/api/v1/auth/validate-device` backend и возвращает `auth_result`.
-2. Stream handling: после успешного handshake клиент открывает `stream_open`, передаёт `stream_data` (base64). В MVP gateway эхо-ответом отправляет `stream_data` обратно.
-3. Usage и heartbeat: `/api/v1/usage/report` принимает трафиковые счётчики по session_id; `/api/v1/gateway/heartbeat` и `/api/v1/outline/heartbeat` фиксируют последний heartbeat узлов.
-4. Health: `/api/v1/health` подтверждает готовность backend.
+2. Outline assignment: при режиме `outline` gateway запрашивает `/api/v1/nodes/assign-outline` с `device_id` и `region`, связывает сессию с выданной Outline-нодой.
+3. Stream handling: после успешного handshake клиент открывает `stream_open`, передаёт `stream_data` (base64). В `fake` режиме gateway эхо-ответом отправляет данные обратно; в `outline` режиме трафик уходит в Shadowsocks-соединение к выбранной ноде.
+4. Usage и heartbeat: `/api/v1/usage/report` принимает трафиковые счётчики по session_id; `/api/v1/gateway/heartbeat` и `/api/v1/outline/heartbeat` фиксируют последний heartbeat узлов.
+5. Health: `/api/v1/health` подтверждает готовность backend.
 
 ## Конфигурация и окружение
 - Backend: настройки из `.env` через `core.config.Settings`: `BACKEND_DB_DSN`, `BACKEND_SECRET_KEY`, `BACKEND_DEBUG`, `BACKEND_HOST`, `BACKEND_PORT`, `JWT_ALGORITHM`, `JWT_EXPIRE_MINUTES`.

@@ -17,12 +17,12 @@
      "region": "string"
    }
    ```
-4. Gateway вызывает backend `/api/v1/auth/validate-device` и возвращает `auth_result`:
+4. Gateway вызывает backend `/api/v1/auth/validate-device` и `/api/v1/nodes/assign-outline` (если выбран режим Outline). Успешный ответ:
    ```json
    {"type":"auth_result","allowed":true,"session_id":"uuid","subscription_status":"active"}
    ```
-   При отказе: `{ "type":"auth_result","allowed":false,"reason":"invalid_token" }` и соединение закрывается.
-5. После успеха клиент открывает потоки.
+   При отказе: `{ "type":"auth_result","allowed":false,"reason":"invalid_token" }` и соединение закрывается. Ошибка назначения Outline-ноды возвращается кадром `error` с кодом `outline_unavailable`.
+5. После успеха клиент открывает потоки; конкретная Outline-нода закреплена за `session_id`, но её параметры не раскрываются клиенту.
 
 ## Message/frame types
 - `hello` — стартовый кадр handshake.
@@ -31,7 +31,7 @@
 - `stream_data` — `{ "type":"stream_data","stream_id":"s1","data":"base64" }`, данные кодируются base64.
 - `stream_close` — `{ "type":"stream_close","stream_id":"s1","reason":"optional" }`.
 - `ping` / `pong` — keepalive.
-- `error` — `{ "type":"error","code":"string","message":"string" }`.
+- `error` — `{ "type":"error","code":"string","message":"string" }`, например `outline_unavailable` при невозможности выбрать ноду.
 
 ## Transport
 - Все кадры — JSON поверх WebSocket (text), соединение защищено TLS.

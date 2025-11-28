@@ -7,6 +7,7 @@ class OutlineNodeAssignmentRequest(BaseModel):
 
 
 class OutlineNodeAssignment(BaseModel):
+    node_id: int
     host: str
     port: int
     method: str | None = None

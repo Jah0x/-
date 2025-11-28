@@ -54,6 +54,90 @@
 - Требует заголовок `X-Admin-Token: <BACKEND_SECRET_KEY>`.
 - Запускает немедленный health-check ноды и возвращает актуальный статус.
 
+### GET /api/v1/admin/plans
+- Требует заголовок `X-Admin-Token: <BACKEND_SECRET_KEY>`.
+- Возвращает список тарифов с полями `id`, `name`, `description`, `traffic_limit`, `period_days`, `price`.
+
+### POST /api/v1/admin/plans
+- Требует заголовок `X-Admin-Token: <BACKEND_SECRET_KEY>`.
+- Создаёт тариф, вход: `name`, опционально `description`, `traffic_limit`, `period_days`, `price`. Возвращает созданный тариф.
+
+### GET /api/v1/admin/plans/{id}
+- Требует заголовок `X-Admin-Token: <BACKEND_SECRET_KEY>`.
+- Возвращает тариф по id или 404.
+
+### PUT /api/v1/admin/plans/{id}
+- Требует заголовок `X-Admin-Token: <BACKEND_SECRET_KEY>`.
+- Обновляет произвольные поля тарифа (пустое тело — 400), на успех отдаёт свежую версию, 404 если не найден.
+
+### DELETE /api/v1/admin/plans/{id}
+- Требует заголовок `X-Admin-Token: <BACKEND_SECRET_KEY>`.
+- Удаляет тариф, на успех `{ "status": "deleted" }`, 404 если не найден.
+
+### GET /api/v1/admin/regions
+- Требует заголовок `X-Admin-Token: <BACKEND_SECRET_KEY>`.
+- Возвращает список регионов `id`, `code`, `name`.
+
+### POST /api/v1/admin/regions
+- Требует заголовок `X-Admin-Token: <BACKEND_SECRET_KEY>`.
+- Создаёт регион по `code` и `name`. При дубликате `code` отдаёт 409 `region_code_exists`.
+
+### GET /api/v1/admin/regions/{id}
+- Требует заголовок `X-Admin-Token: <BACKEND_SECRET_KEY>`.
+- Возвращает регион по id или 404.
+
+### PUT /api/v1/admin/regions/{id}
+- Требует заголовок `X-Admin-Token: <BACKEND_SECRET_KEY>`.
+- Обновляет регион (допускается смена `code` с проверкой уникальности). Пустое тело даёт 400 `empty_body`, 404 при отсутствии региона, 409 при конфликте `code`.
+
+### DELETE /api/v1/admin/regions/{id}
+- Требует заголовок `X-Admin-Token: <BACKEND_SECRET_KEY>`.
+- Удаляет регион, на успех `{ "status": "deleted" }`.
+
+### GET /api/v1/admin/outline-nodes
+- Требует заголовок `X-Admin-Token: <BACKEND_SECRET_KEY>`.
+- Возвращает конфигурацию активных Outline-нод: `id`, `name`, `region`, `host`, `port`, `method`, `password`, `api_url`, `api_key`, `tag`, `priority`, `is_active`, `is_deleted`.
+
+### POST /api/v1/admin/outline-nodes
+- Требует заголовок `X-Admin-Token: <BACKEND_SECRET_KEY>`.
+- Создаёт Outline-ноду (опционально `region_code`). Невалидный регион даёт 404 `region_not_found`. Возвращает созданную конфигурацию.
+
+### GET /api/v1/admin/outline-nodes/{id}
+- Требует заголовок `X-Admin-Token: <BACKEND_SECRET_KEY>`.
+- Возвращает конфигурацию ноды или 404.
+
+### PUT /api/v1/admin/outline-nodes/{id}
+- Требует заголовок `X-Admin-Token: <BACKEND_SECRET_KEY>`.
+- Обновляет поля ноды, допускает перенос в другой регион (`region_code`), активирует/деактивирует `is_active`. Пустое тело даёт 400, отсутствующий регион — 404 `region_not_found`, несуществующая нода — 404 `not_found`.
+
+### DELETE /api/v1/admin/outline-nodes/{id}
+- Требует заголовок `X-Admin-Token: <BACKEND_SECRET_KEY>`.
+- Помечает ноду удалённой и деактивирует, ответ `{ "status": "deleted" }`.
+
+### GET /api/v1/admin/gateway-nodes
+- Требует заголовок `X-Admin-Token: <BACKEND_SECRET_KEY>`.
+- Возвращает конфигурации gateway-нод: `id`, `region`, `host`, `port`, `is_active`.
+
+### POST /api/v1/admin/gateway-nodes
+- Требует заголовок `X-Admin-Token: <BACKEND_SECRET_KEY>`.
+- Создаёт gateway-ноду, `region_code` опционален. Неизвестный регион даёт 404 `region_not_found`.
+
+### GET /api/v1/admin/gateway-nodes/{id}
+- Требует заголовок `X-Admin-Token: <BACKEND_SECRET_KEY>`.
+- Возвращает конфигурацию gateway-ноды или 404.
+
+### PUT /api/v1/admin/gateway-nodes/{id}
+- Требует заголовок `X-Admin-Token: <BACKEND_SECRET_KEY>`.
+- Обновляет хост/порт/регион и статус активности. Пустое тело — 400, неизвестный регион — 404 `region_not_found`, отсутствующая нода — 404 `not_found`.
+
+### DELETE /api/v1/admin/gateway-nodes/{id}
+- Требует заголовок `X-Admin-Token: <BACKEND_SECRET_KEY>`.
+- Удаляет ноду, ответ `{ "status": "deleted" }`.
+
+### GET /api/v1/admin/audit
+- Требует заголовок `X-Admin-Token: <BACKEND_SECRET_KEY>`.
+- Возвращает последние записи аудита (limit по умолчанию 100, ограничен 1000) с полями `id`, `actor`, `action`, `resource_type`, `resource_id`, `payload`, `created_at`.
+
 ## Модели данных
 - Пользователь (`users`): id, email, is_active, created_at, updated_at.
 - План (`plans`): id, name, description, traffic_limit, period_days, price.
@@ -64,3 +148,4 @@
 - Outline-ключ (`outline_access_keys`): id, device_id, outline_node_id, access_key_id, password, method, port, access_url, revoked, created_at.
 - Gateway-нода (`gateway_nodes`): id, region_id, host, port, is_active, last_heartbeat_at.
 - Сессия (`sessions`): id, device_id, outline_node_id, gateway_node_id, started_at, ended_at, bytes_up, bytes_down, status.
+- Аудит админских действий (`admin_audit_logs`): id, actor, action, resource_type, resource_id, payload (JSON), created_at.

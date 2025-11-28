@@ -10,8 +10,9 @@
 - `app/core`: конфигурация (`config.py`), подключение к БД (`database.py`), JWT-утилиты (`security.py`), JSON-логирование (`logging.py`).
 - `app/models`: SQLAlchemy-модели (`user.py`, `device.py`, `subscription.py`, `plan.py`, `region.py`, `outline_node.py`, `gateway_node.py`, `session.py`, `outline_pool*.py`).
 - `app/schemas`: Pydantic-схемы для API (`auth.py`, `device.py`, `plan.py`, `subscription.py`, `region.py`, `nodes.py`, `session.py`, `usage.py`, `heartbeat.py`).
-- `app/services`: прикладная логика (`auth_service.py`, `device_service.py`, `subscriptions_service.py`, `nodes_service.py`, `sessions_service.py`, `heartbeat_service.py`, `outline_pool_service.py`).
+- `app/services`: прикладная логика (`auth_service.py`, `device_service.py`, `subscriptions_service.py`, `nodes_service.py`, `sessions_service.py`, `heartbeat_service.py`, `outline_pool_service.py`, `plan_service.py`, `region_service.py`, `admin_nodes_service.py`, `audit_service.py`).
 - `app/api/v1`: роутеры FastAPI (`health.py`, `auth.py`, `nodes.py`, `usage.py`, `heartbeat.py`) собираются в `api/v1/__init__.py` и подключаются из `app/main.py`.
+- `app/admin_cli.py`: CLI для администраторов, использует HTTP-запросы к `/api/v1/admin/*` с `X-Admin-Token`.
 - `alembic/`: `env.py` с async-настройкой и миграции схемы в `versions/`.
 - `tests/`: unit-тесты healthcheck и валидации устройства.
 
@@ -32,6 +33,7 @@
 3. Stream handling: после успешного handshake клиент открывает `stream_open`, передаёт `stream_data` (base64). В `fake` режиме gateway эхо-ответом отправляет данные обратно; в `outline` режиме трафик уходит в Shadowsocks-соединение к выбранной ноде.
 4. Usage и heartbeat: `/api/v1/usage/report` принимает трафиковые счётчики по session_id; `/api/v1/gateway/heartbeat` и `/api/v1/outline/heartbeat` фиксируют последний heartbeat узлов.
 5. Health: `/api/v1/health` подтверждает готовность backend.
+6. Администрирование: операции CRUD над тарифами, регионами и gateway/Outline-нодами выполняются через `/api/v1/admin/*` с заголовком `X-Admin-Token`, каждое изменение логируется в `admin_audit_logs`.
 
 ## Конфигурация и окружение
 - Backend: настройки из `.env` через `core.config.Settings`: `BACKEND_DB_DSN`, `BACKEND_SECRET_KEY`, `BACKEND_DEBUG`, `BACKEND_HOST`, `BACKEND_PORT`, `JWT_ALGORITHM`, `JWT_EXPIRE_MINUTES`.

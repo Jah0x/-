@@ -1,534 +1,108 @@
-1. Общая концепция
+# HTTVPS Specification
+
+## 1. Overview
+HTTVPS is a VPN-like tunneling service built on top of HTTPS (WebSocket or HTTP/2) to disguise traffic as regular TLS. A dedicated gateway authenticates devices against the control-plane backend, selects an Outline (Shadowsocks) node, and proxies user traffic through that node. End users interact only with the HTTVPS brand and client application; Outline nodes stay hidden behind the gateway.
+
+## 2. Components
+- **Backend (control plane):** user/device/subscription management, region and node catalogs, Outline and gateway pools, traffic accounting, heartbeats, and assignment APIs.
+- **Gateway (data plane):** terminates HTTPS/WebSocket connections from clients, authenticates via backend, multiplexes TCP streams, proxies traffic to selected Outline nodes, reports usage and health.
+- **Outline pool:** set of Outline servers (Shadowsocks) accessed via technical access keys; not aware of end users directly.
+- **Client SDK/app:** initiates HTTVPS sessions over HTTPS, performs handshake and framing, obtains node assignment via backend and gateway, and transports TCP streams.
+- **Monitoring/observability:** structured logging and Prometheus-compatible metrics across backend and gateway; dashboards and alerting in later stages.
+- **Storage:** PostgreSQL for backend state; optional Redis/message queue for shared state and rate limits in later stages.
+
+## 3. Roadmap / План этапов
+Each stage lists purpose, dependencies, key tasks, expected artifacts, and done criteria.
+
+### Stage 0 — Repository bootstrap
+- **Goal:** establish base repository layout and tooling for backend, gateway, and docs.
+- **Dependencies:** none.
+- **Key tasks:** create backend/ and gateway/ skeletons; add docker-compose, .env.example, Makefile; initialize docs and README.
+- **Expected artifacts:** `backend/`, `gateway/`, `.gitignore`, `docker-compose.yml`, `Makefile`, `.env.example`, `docs/00-spec-httvps.md`, `docs/CHANGELOG.md`.
+- **Done:** repository builds locally with docker-compose stubs; documentation describes structure and setup.
+
+### Stage 1 — Backend MVP (control plane)
+- **Goal:** deliver minimal control-plane APIs and data models for device validation and basic usage reporting.
+- **Dependencies:** Stage 0.
+- **Key tasks:** document architecture and APIs (`docs/01-architecture-overview.md`, `docs/02-control-plane-api.md`, `docs/05-outline-pool.md`); implement FastAPI app layers (api/schemas/models/services); add PostgreSQL models and Alembic migrations; expose `/api/v1/auth/validate-device`, stub `/nodes/assign-outline`, `/usage/report`, `/gateway/heartbeat`, `/outline/heartbeat`; add unit tests.
+- **Expected artifacts:** `backend/app/core/config.py`, `backend/app/models/*.py`, `backend/app/schemas/*.py`, `backend/app/services/*.py`, `backend/app/api/v1/*.py`, `backend/alembic/`; `backend/pyproject.toml` or `backend/requirements.txt`; updated docs and changelog.
+- **Done:** backend runs locally with migrations, endpoints available, tests passing, docs updated.
+
+### Stage 2 — HTTVPS Gateway MVP
+- **Goal:** create HTTPS/WebSocket gateway with initial HTTVPS protocol handshake and backend validation.
+- **Dependencies:** Stages 0–1 (backend auth endpoint ready).
+- **Key tasks:** define protocol in `docs/03-httvps-protocol.md` and gateway design in `docs/04-gateway-design.md`; implement Go service with TLS termination, hello/auth handshake, validation via backend; basic stream routing to stub upstream; metrics/logging hooks.
+- **Expected artifacts:** `gateway/cmd/httvps-gateway/main.go`, `gateway/internal/config/`, `gateway/internal/protocol/`, `gateway/internal/auth/`, `gateway/internal/sessions/`, `gateway/internal/metrics/`, `gateway/tests/`; documentation and changelog updates.
+- **Done:** gateway accepts secure connections, performs hello/auth, forwards frames to stub backend/upstream, exposes basic metrics/logs.
+
+### Stage 3 — Outline integration
+- **Goal:** enable real traffic proxying through Outline nodes via Shadowsocks.
+- **Dependencies:** Stages 0–2.
+- **Key tasks:** add Outline client module, secure storage of access keys; connect gateway streams to Outline; update protocol and design docs; run local end-to-end tests.
+- **Expected artifacts:** `gateway/internal/outline/`, updates in `gateway/internal/protocol/` and `gateway/internal/sessions/`; revised `docs/04-gateway-design.md`, `docs/05-outline-pool.md`, changelog.
+- **Done:** gateway proxies traffic to Outline nodes with validated access keys; documentation reflects integration; basic e2e verified locally.
+
+### Stage 4 — Multi-gateway and Outline pool management
+- **Goal:** support multiple gateways and Outline nodes with selection policies and health monitoring.
+- **Dependencies:** Stages 0–3.
+- **Key tasks:** backend services for node catalog and selection; heartbeat schemas and endpoints; database fields for health/load; gateway-side selector/fallback; enhanced metrics.
+- **Expected artifacts:** `backend/app/services/nodes.py`, `backend/app/api/v1/nodes.py`, heartbeat schemas/migrations; updates to `docs/02-control-plane-api.md`, `docs/05-outline-pool.md`; `gateway/internal/outline/selector.go`; expanded metrics.
+- **Done:** backend tracks node health/regions; gateway selects nodes with fallback; heartbeat endpoints operational; metrics available.
+
+### Stage 5 — Observability (logging and metrics)
+- **Goal:** establish structured logging and Prometheus metrics with baseline dashboards/alerts.
+- **Dependencies:** Stages 0–4.
+- **Key tasks:** JSON logging formats; Prometheus exporters for backend and gateway; monitoring manifests and dashboards; document architecture impact.
+- **Expected artifacts:** `backend/app/core/logging.py`, `gateway/internal/metrics/`, `deploy/monitoring/`; updated `docs/01-architecture-overview.md`, changelog.
+- **Done:** structured logs emitted; core metrics exposed; monitoring stack deployable; docs updated.
+
+### Stage 6 — Packaging and deployment
+- **Goal:** provide containerization and baseline Kubernetes deployment assets.
+- **Dependencies:** Stages 0–5.
+- **Key tasks:** Dockerfiles for backend and gateway; docker-compose for local setup; K8s manifests for backend/gateway/postgres/ingress; README deployment notes.
+- **Expected artifacts:** `backend/Dockerfile`, `gateway/Dockerfile`, `docker-compose.yml`, `deploy/k8s/backend-deployment.yaml`, `deploy/k8s/gateway-deployment.yaml`, `deploy/k8s/postgres.yaml`, `deploy/k8s/ingress.yaml`; documentation updates.
+- **Done:** images build locally; compose and K8s manifests boot services; deployment steps documented.
+
+### Stage 7 — Client SDK (baseline)
+- **Goal:** deliver reference HTTVPS client SDK and usage examples.
+- **Dependencies:** Stages 0–6 (protocol stable).
+- **Key tasks:** document client protocol expectations; implement minimal SDK (e.g., Go/TypeScript); publish examples; update README and protocol doc.
+- **Expected artifacts:** `client-sdk/` (language-specific), sample apps; updated `docs/03-httvps-protocol.md`, `README.md`, changelog.
+- **Done:** SDK connects via HTTVPS protocol, completes handshake, opens streams; examples run locally; docs reflect SDK APIs.
+
+### Stage 8 — Management and configuration
+- **Goal:** provide admin/ops capabilities for plans, users, nodes, and audits.
+- **Dependencies:** Stages 0–7.
+- **Key tasks:** admin REST API and optional CLI; RBAC roles; audit logging; extend docs for admin flows.
+- **Expected artifacts:** `backend/app/api/v1/admin/*`, `backend/app/services/admin/*`, `backend/app/schemas/admin/*`, optional `backend/app/cli.py`; updates to `docs/02-control-plane-api.md`; changelog.
+- **Done:** admin endpoints/CLI manage core entities with RBAC; audit events recorded; documentation updated.
+
+## 4. Non-functional Requirements
+- **DPI evasion:** tunnel over standard HTTPS with valid TLS; payload framing mimics regular WebSocket/HTTP/2 traffic.
+- **Security:** TLS mandatory; device auth via backend-issued tokens; secure handling of Outline access keys; JSON logging without sensitive payloads.
+- **Performance/availability:** scalable gateway instances; health checks and heartbeats; minimal protocol overhead; targets defined in assumptions below until finalized.
+- **Logging/metrics:** structured JSON logs; Prometheus metrics exposed on backend and gateway; readiness/liveness probes for deployments.
+- **Reliability:** graceful connection handling, retries/fallbacks for node selection; migrations for data integrity.
+
+## 5. Coding and Documentation Rules
+- No inline code comments or docstrings; explanations live in `docs/*.md` and `CHANGELOG.md`.
+- Update relevant documentation and changelog whenever backend/gateway behavior or protocol/API contracts change.
+- Architecture is modular: domain logic, transport/protocol, and infrastructure adapters separated; components include backend, gateway, client SDK, management service.
+- Logging must be structured JSON with fields such as `request_id`, `user_id`/`device_id`, `node_id`, and outcome codes; avoid sensitive data.
+- Metrics: expose baseline Prometheus counters/gauges/histograms for connections, auth successes/failures, stream lifecycle, Outline latency/throughput, and resource usage.
+
+## 6. Assumptions and Open Questions
+### Assumptions (defaults, overridable)
+- **SLA/performance targets:** per gateway aim for 500–1,000 concurrent sessions, p95 latency <150 ms for auth/assignment, and HTTVPS framing overhead <10% of payload size.
+- **Load-balancing policy:** default weighted round-robin within requested region, extensible to load/health-based selection.
+- **Heartbeat payload format:** JSON including `node_id`, `region`, `uptime_sec`, `active_sessions`, `cpu_load`, `mem_load`, `bytes_up`, `bytes_down`, `last_error`, `timestamp`.
+- **Client SDK languages:** start with Go and TypeScript reference SDKs.
+- **RBAC baseline:** admin REST API with roles `admin`, `support`, `read-only`, plus optional CLI wrappers.
+
+### Open Questions (need product decision)
+- Final SLA/SLO metrics (TPS, latency, availability) and target regions.
+- Detailed policy for storing/protecting Outline access keys and rotation cadence.
+- Exact heartbeat intervals/timeouts and metric thresholds for node eviction.
+- Supported platforms for client apps (desktop/mobile) and offline/auto-update requirements.
+- Preferred channel for configuration delivery (UI portal vs. CLI vs. external system) and audit retention periods.
 
-Проект: HTTVPS – собственный VPN-протокол и сервис на базе HTTPS-туннеля и Outline-серверов.
-
-Идея:
-
-Клиентское приложение устанавливает VPN-туннель до HTTVPS-gateway по протоколу HTTVPS поверх HTTPS (WebSocket/HTTP2).
-
-HTTVPS-gateway:
-
-аутентифицирует устройство и проверяет подписку через backend (control plane),
-
-выбирает подходящий Outline-сервер,
-
-проксирует трафик клиента в пул Outline-серверов по локальной сети (через Shadowsocks/Outline).
-
-Outline-серверы:
-
-не знают о пользователях напрямую,
-
-используются как «двигатель» для выхода в интернет,
-
-работают с ограниченным пулом технических access-keys.
-
-Пользователь взаимодействует только с брендом HTTVPS и клиентским приложением, про Outline он не знает.
-
-2. Архитектура: уровни
-
-Система разделена на два основных слоя:
-
-Control plane (backend)
-Отвечает за:
-
-пользователей, устройства, подписки;
-
-описание регионов и пулов серверов;
-
-учёт трафика и лимитов;
-
-управление списком HTTVPS-gateway и Outline-нод.
-
-Data plane (gateway + Outline)
-Отвечает за:
-
-установку туннеля HTTVPS от клиента;
-
-авторизацию устройства по токену;
-
-выбор Outline-ноды;
-
-мультиплексирование TCP-трафика внутри HTTPS-туннеля;
-
-прокси трафика в Outline.
-
-Клиентские приложения будут разрабатываться отдельно. В рамках этого ТЗ фокус на серверной части: backend и HTTVPS-gateway.
-
-3. Технологический стек
-
-По умолчанию:
-
-Backend (control plane):
-
-Язык: Python 3.11+
-
-Framework: FastAPI
-
-БД: PostgreSQL
-
-ORM: SQLAlchemy (или SQLAlchemy + Alembic для миграций)
-
-Аутентификация токенов: JWT или аналогичный механизм
-
-HTTVPS-gateway (data plane):
-
-Язык: Go 1.22+
-
-Сетевой стек: стандартная библиотека net/http + сторонние библиотеки для WebSocket, при необходимости – HTTP/2
-
-Shadowsocks-клиент/библиотека для подключения к Outline-серверам
-
-Инфраструктура и окружение:
-
-Docker / docker-compose для локальной разработки
-
-Отдельный файл .env с конфигурацией
-
-Makefile или набор скриптов для типичных задач (запуск, тесты, миграции)
-
-Если стек нужно изменить, это делается только по явной инструкции владельца проекта.
-
-4. Структура репозитория
-
-Рекомендуемая структура:
-
-/
-  backend/
-    app/
-      api/
-      core/
-      models/
-      schemas/
-      services/
-    tests/
-    alembic/
-    pyproject.toml / requirements.txt
-    README.md
-
-  gateway/
-    cmd/httvps-gateway/
-    internal/
-      config/
-      protocol/
-      auth/
-      outline/
-      sessions/
-      metrics/
-    tests/
-    go.mod
-    README.md
-
-  docs/
-    00-spec-httvps.md           # этот документ
-    01-architecture-overview.md # общая архитектура
-    02-control-plane-api.md     # описание REST API backend’а
-    03-httvps-protocol.md       # описание протокола HTTVPS
-    04-gateway-design.md        # устройство gateway
-    05-outline-pool.md          # модель пула Outline-нод
-    CHANGELOG.md
-
-  .gitignore
-  docker-compose.yml
-  README.md
-
-
-Codex обязан поддерживать актуальность README и файлов в docs/ по мере изменений.
-
-5. Правила написания кода и документации
-
-Код без комментариев
-
-В исходном коде не писать комментарии, если не указано иное.
-
-Вся архитектура, объяснения алгоритмов, описания протоколов и структур данных оформляются в Markdown-документах в каталоге docs/.
-
-Исключения: минимально необходимый комментарий для сложных участков кода, если совсем иначе невозможно.
-
-Документация вместо комментариев
-
-Для каждой крупной подсистемы (backend, gateway, протокол, работа с Outline) должно быть понятное текстовое описание в docs/.
-
-При добавлении новых модулей, сущностей или эндпоинтов необходимо обновлять:
-
-соответствующий документ в docs/,
-
-при необходимости README.md,
-
-CHANGELOG.md.
-
-Тесты
-
-Для backend и gateway должны быть базовые unit-тесты на ключевую бизнес-логику.
-
-Новая логика должна по возможности покрываться тестами.
-
-Стиль
-
-Backend (Python): PEP 8, чёткие слои (schemas, models, services, api).
-
-Gateway (Go): идиоматичный Go-код, разделение на пакеты по функциональности (config, protocol, auth, outline, sessions).
-
-Чистота
-
-Не использовать «магические значения» в коде: конфигурация выносится в настройки/конфиг.
-
-Не тянуть лишние зависимости.
-
-6. Модель данных (backend)
-
-Backend должен поддерживать следующие сущности (минимальный набор):
-
-users:
-
-id
-
-идентификатор (email / telegram_id / phone)
-
-status (active / banned / pending)
-
-created_at, updated_at
-
-devices:
-
-id
-
-user_id
-
-device_uuid
-
-platform (android / windows / etc)
-
-status (active / revoked)
-
-last_seen_at
-
-subscriptions:
-
-id
-
-user_id
-
-plan_id
-
-valid_until
-
-status (active / expired / cancelled)
-
-plans:
-
-id
-
-name
-
-max_devices
-
-traffic_limit_gb (nullable)
-
-price (на будущее)
-
-regions:
-
-id
-
-code (например, "ru-1", "eu-1")
-
-name
-
-outline_nodes:
-
-id
-
-region_id
-
-internal_ip
-
-ss_port
-
-ss_method
-
-ss_password или ссылка на конфиг/секрет
-
-max_sessions
-
-health_status
-
-gateway_nodes:
-
-id
-
-region_id
-
-public_ip
-
-internal_ip
-
-status
-
-last_heartbeat_at
-
-sessions (может быть в БД или в отдельном хранилище):
-
-id
-
-device_id
-
-gateway_node_id
-
-outline_node_id
-
-started_at
-
-ended_at
-
-bytes_up
-
-bytes_down
-
-Codex при работе с моделями обязан:
-
-создавать миграции,
-
-обновлять схемы и описания в docs/.
-
-7. Backend API (минимальный набор)
-
-Backend должен предоставить следующие ключевые эндпоинты (черновой список):
-
-POST /api/v1/auth/validate-device
-
-Вход:
-
-device_id
-
-access_token
-
-region
-
-Выход при успехе:
-
-флаг ok
-
-информация о пользователе/подписке/лимитах
-
-Выход при отказе:
-
-ok: false
-
-код ошибки (NO_SUBSCRIPTION, DEVICE_BANNED, и т.п.)
-
-POST /api/v1/nodes/assign-outline
-
-Вход:
-
-region
-
-user_id
-
-device_id
-
-Выход:
-
-данные по выбранной Outline-ноде (internal_ip, порт, метод, пароль).
-
-POST /api/v1/usage/report
-
-Вход:
-
-gateway_id
-
-device_id
-
-session_id
-
-bytes_up
-
-bytes_down
-
-started_at
-
-ended_at
-
-Назначение: учёт трафика и сессий.
-
-POST /api/v1/gateway/heartbeat
-
-Вход:
-
-gateway_id
-
-метрики нагрузки
-
-Назначение: мониторинг состояния gateway-узлов.
-
-POST /api/v1/outline/heartbeat
-
-Аналогично для Outline-нод.
-
-Подробное описание форматов запросов/ответов должно быть оформлено в docs/02-control-plane-api.md.
-
-8. HTTVPS-протокол (уровень gateway ↔ клиент)
-
-Протокол HTTVPS работает поверх HTTPS (WebSocket / HTTP2).
-
-Минимальная модель:
-
-Handshake
-
-Клиент после установления соединения отправляет кадр hello:
-
-{
-  "type": "hello",
-  "device_id": "...",
-  "access_token": "...",
-  "region": "ru-1",
-  "client_version": "1.0.0",
-  "platform": "android"
-}
-
-
-Gateway:
-
-вызывает backend /auth/validate-device,
-
-при успехе отвечает:
-
-{
-  "type": "hello_ok",
-  "session_id": "..."
-}
-
-
-при ошибке отвечает:
-
-{
-  "type": "error",
-  "code": "NO_SUBSCRIPTION"
-}
-
-
-и закрывает соединение.
-
-Мультиплексирование потоков
-
-Внутри одного соединения HTTVPS есть множество логических потоков:
-
-stream_open:
-
-{
-  "type": "stream_open",
-  "stream_id": 13
-}
-
-
-stream_data:
-
-{
-  "type": "stream_data",
-  "stream_id": 13,
-  "payload": "<base64>"
-}
-
-
-stream_close:
-
-{
-  "type": "stream_close",
-  "stream_id": 13
-}
-
-
-Реализация протокола может быть сначала на JSON + base64, затем оптимизирована до бинарного формата. Описание протокола должно быть вынесено в отдельный документ: docs/03-httvps-protocol.md.
-
-Лимиты и ошибки
-
-Gateway при превышении лимитов или других событиях должен уметь отправлять ошибки:
-
-{
-  "type": "error",
-  "code": "LIMIT_REACHED"
-}
-
-9. Логика HTTVPS-gateway
-
-Для каждого клиентского соединения HTTVPS-gateway должен:
-
-Принять HTTPS / WebSocket соединение.
-
-Получить кадр hello, провалидировать устройство через backend.
-
-Запросить Outline-ноду в нужном регионе.
-
-Открыть соединение с Outline (через Shadowsocks-клиент).
-
-Обрабатывать stream_* кадры:
-
-открывать и закрывать TCP-потоки к Outline;
-
-проксировать payload в обе стороны.
-
-Вести учёт трафика по сессии и устройству.
-
-Периодически отправлять отчёт /usage/report.
-
-Отдельный документ docs/04-gateway-design.md должен описывать внутреннюю структуру сервиса, основные пакеты и потоки данных.
-
-10. Этапы работы
-
-Codex должен поддерживать поэтапную разработку:
-
-Этап 0: инициализация репозитория
-
-Создать структуру каталогов,
-
-подготовить базовые README и docs/00-spec-httvps.md,
-
-настроить базовый Docker / docker-compose.
-
-Этап 1: backend (минимальный функционал)
-
-Модели БД,
-
-базовые миграции,
-
-реализация /auth/validate-device,
-
-заглушки /usage/report и /nodes/assign-outline,
-
-базовые тесты.
-
-Этап 2: HTTVPS-gateway (MVP)
-
-Сервер HTTPS + WebSocket,
-
-реализация handshake hello,
-
-интеграция с backend /auth/validate-device,
-
-заготовка для работы с Outline (пока можно использовать «фейковый» upstream).
-
-Этап 3: интеграция с Outline
-
-Подключение Shadowsocks-клиента,
-
-проброс трафика в реально работающий Outline-сервер,
-
-тесты на уровне end-to-end в локальной среде.
-
-Этап 4: несколько gateway и несколько Outline-нод
-
-Поддержка списка нод в backend,
-
-выбор ноды по региону,
-
-heartbeat/healthcheck,
-
-обновление документации по архитектуре.
-
-На каждом этапе Codex обязан:
-
-обновлять документацию в docs/,
-
-обновлять CHANGELOG.md,
-
-
-следить за чистотой и консистентностью структуры проекта.

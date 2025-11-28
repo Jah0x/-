@@ -16,6 +16,8 @@ from app.db import Base
 from app.core.config import get_settings
 from app.core.database import get_session
 from app.main import app
+from app.models.user import User
+from app.models.device import Device
 
 get_settings.cache_clear()
 
@@ -40,3 +42,17 @@ async def client(test_app):
     transport = ASGITransport(app=test_app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
+
+
+@pytest_asyncio.fixture
+async def setup_device(test_app):
+    session_maker = test_app.state.test_session_maker
+    async with session_maker() as session:
+        user = User(email="user@example.com", is_active=True)
+        session.add(user)
+        await session.flush()
+        device = Device(user_id=user.id, device_id="dev")
+        session.add(device)
+        await session.commit()
+        await session.refresh(device)
+        return device

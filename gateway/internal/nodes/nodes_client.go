@@ -16,12 +16,14 @@ type AssignOutlineRequest struct {
 }
 
 type AssignOutlineResponse struct {
-	NodeID   int    `json:"node_id"`
-	Host     string `json:"host"`
-	Port     int    `json:"port"`
-	Method   string `json:"method,omitempty"`
-	Password string `json:"password,omitempty"`
-	Region   string `json:"region,omitempty"`
+	NodeID      int    `json:"node_id"`
+	Host        string `json:"host"`
+	Port        int    `json:"port"`
+	Method      string `json:"method,omitempty"`
+	Password    string `json:"password,omitempty"`
+	Region      string `json:"region,omitempty"`
+	AccessKeyID string `json:"access_key_id,omitempty"`
+	AccessURL   string `json:"access_url,omitempty"`
 }
 
 type Client struct {

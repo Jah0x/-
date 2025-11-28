@@ -47,3 +47,10 @@ class OutlineClient:
             response = await client.delete(f"/access-keys/{key_id}")
         if response.status_code not in (200, 204, 404):
             raise OutlineClientError(f"delete_key_failed:{response.status_code}")
+
+    async def health_check(self) -> None:
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        async with httpx.AsyncClient(base_url=self.api_url, timeout=self.timeout, headers=headers, transport=self.transport) as client:
+            response = await client.get("/access-keys")
+        if response.status_code != 200:
+            raise OutlineClientError(f"health_check_failed:{response.status_code}")

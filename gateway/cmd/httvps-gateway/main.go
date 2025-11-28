@@ -1,0 +1,58 @@
+package main
+
+import (
+	"context"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"github.com/httvps/httvps/gateway/internal/auth"
+	"github.com/httvps/httvps/gateway/internal/config"
+	"github.com/httvps/httvps/gateway/internal/metrics"
+	"github.com/httvps/httvps/gateway/internal/protocol"
+	"github.com/httvps/httvps/gateway/internal/server"
+	"github.com/httvps/httvps/gateway/internal/sessions"
+	"github.com/httvps/httvps/gateway/internal/upstream"
+	"golang.org/x/exp/slog"
+)
+
+func main() {
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("config error: %v", err)
+	}
+	logger := newLogger(cfg.LogFormat, cfg.LogLevel)
+	m := metrics.New(cfg.MetricsEnabled, cfg.MetricsPath)
+	authClient := auth.NewClient(cfg.BackendBaseURL, cfg.BackendTimeout)
+	sessionManager := sessions.NewManager(cfg.MaxStreamsPerSession)
+	up := upstream.NewFakeUpstream(true)
+	handler := &protocol.Handler{AuthClient: authClient, Sessions: sessionManager, Upstream: up, Metrics: m, Logger: logger}
+	srv := server.New(cfg, handler, m, logger)
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+	if err := srv.Start(ctx); err != nil {
+		logger.Error("gateway_exit", slog.String("error", err.Error()))
+	}
+}
+
+func newLogger(format string, level string) *slog.Logger {
+	var slogLevel slog.Level
+	switch level {
+	case "debug":
+		slogLevel = slog.LevelDebug
+	case "warn":
+		slogLevel = slog.LevelWarn
+	case "error":
+		slogLevel = slog.LevelError
+	default:
+		slogLevel = slog.LevelInfo
+	}
+	var handler slog.Handler
+	if format == "text" {
+		handler = slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slogLevel})
+	} else {
+		handler = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slogLevel})
+	}
+	return slog.New(handler)
+}

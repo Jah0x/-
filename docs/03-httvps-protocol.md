@@ -1,24 +1,39 @@
 # HTTVPS Protocol
 
 ## Purpose
-Provide a VPN-like tunnel over HTTPS (WebSocket or HTTP/2) that blends with regular TLS traffic while enabling multiplexed TCP streams to Outline nodes.
+Туннель поверх HTTPS (WebSocket/HTTP/2) с мультиплексированными потоками, маскирующийся под обычный TLS-трафик.
 
 ## Handshake
-1. **TLS establishment** between client and gateway.
-2. **Hello frame** from client with client version, device token, desired region, capabilities.
-3. **Auth/validate** by gateway via backend `/auth/validate-device`; gateway responds with accept/reject and session parameters.
-4. **Session setup** including node assignment (if not pre-fetched) and stream window parameters.
+1. TLS соединение между клиентом и gateway.
+2. WebSocket upgrade на `/ws`.
+3. Клиент отправляет `hello` JSON-фрейм:
+   ```json
+   {
+     "type": "hello",
+     "device_id": "string",
+     "token": "jwt",
+     "client_version": "string",
+     "capabilities": ["string"],
+     "region": "string"
+   }
+   ```
+4. Gateway вызывает backend `/api/v1/auth/validate-device` и возвращает `auth_result`:
+   ```json
+   {"type":"auth_result","allowed":true,"session_id":"uuid","subscription_status":"active"}
+   ```
+   При отказе: `{ "type":"auth_result","allowed":false,"reason":"invalid_token" }` и соединение закрывается.
+5. После успеха клиент открывает потоки.
 
 ## Message/frame types
-- `hello` — client capabilities, token, region preference.
-- `auth_result` — accept/reject, assigned region/node hints.
-- `stream_open` — open logical TCP stream with `stream_id` and target metadata.
-- `stream_data` — payload chunks for a stream (binary/base64 framing depending on transport mode).
-- `stream_close` — terminate logical stream with reason code.
-- `ping` / `pong` — liveness checks.
-- `error` — structured error codes (e.g., `LIMIT_REACHED`, `AUTH_FAILED`, `NODE_UNAVAILABLE`).
+- `hello` — стартовый кадр handshake.
+- `auth_result` — подтверждение/отказ сессии, `session_id` выдаётся gateway.
+- `stream_open` — `{ "type":"stream_open","stream_id":"s1","target":"optional" }`.
+- `stream_data` — `{ "type":"stream_data","stream_id":"s1","data":"base64" }`, данные кодируются base64.
+- `stream_close` — `{ "type":"stream_close","stream_id":"s1","reason":"optional" }`.
+- `ping` / `pong` — keepalive.
+- `error` — `{ "type":"error","code":"string","message":"string" }`.
 
-## Encryption and transport
-- All traffic runs over TLS with standard ciphers; certificate management handled by gateway deployment.
-- WebSocket text/binary frames or HTTP/2 data frames may carry JSON in early versions; binary framing is allowed in optimized iterations.
-- Payload encryption beyond TLS is optional; sensitive identifiers kept out of payload where possible.
+## Transport
+- Все кадры — JSON поверх WebSocket (text), соединение защищено TLS.
+- В версии MVP payload передаётся в base64, binary-фреймы будут добавлены в оптимизациях.
+

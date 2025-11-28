@@ -29,5 +29,27 @@ services:
     ports:
       - "${BACKEND_PORT}:8000"
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+  gateway:
+    build: ./gateway
+    env_file:
+      - .env
+    environment:
+      GATEWAY_LISTEN_ADDR: ${GATEWAY_LISTEN_ADDR}
+      GATEWAY_TLS_CERT_PATH: ${GATEWAY_TLS_CERT_PATH}
+      GATEWAY_TLS_KEY_PATH: ${GATEWAY_TLS_KEY_PATH}
+      BACKEND_BASE_URL: ${BACKEND_BASE_URL}
+      BACKEND_TIMEOUT: ${BACKEND_TIMEOUT}
+      GATEWAY_LOG_LEVEL: ${GATEWAY_LOG_LEVEL}
+      GATEWAY_LOG_FORMAT: ${GATEWAY_LOG_FORMAT}
+      GATEWAY_METRICS_ENABLED: ${GATEWAY_METRICS_ENABLED}
+      GATEWAY_METRICS_PATH: ${GATEWAY_METRICS_PATH}
+      GATEWAY_MAX_STREAMS: ${GATEWAY_MAX_STREAMS}
+    depends_on:
+      - backend
+    ports:
+      - "8443:8443"
+    volumes:
+      - ./deploy/certs:/app/deploy/certs:ro
+
 volumes:
   postgres_data:

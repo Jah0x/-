@@ -3,12 +3,14 @@ package upstream
 import "context"
 
 type OutlineNodeConfig struct {
-	NodeID   int
-	Host     string
-	Port     int
-	Method   string
-	Password string
-	Region   string
+	NodeID      int
+	Host        string
+	Port        int
+	Method      string
+	Password    string
+	Region      string
+	AccessKeyID string
+	AccessURL   string
 }
 
 type Upstream interface {

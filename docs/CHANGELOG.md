@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0] - 2025-12-15
+### Added
+- Backend хранит Outline-ноды с доступом к Outline API и таблицу выданных access-ключей, миграции Alembic обновлены.
+- Добавлен асинхронный клиент Outline API и интеграция assign-outline с созданием реальных ключей и привязкой к устройству.
+- Gateway и его протокол читают расширенный ответ assign-outline (id/URL ключа), обновлены структуры upstream.
+- Добавлены unit-тесты для Outline-клиента и обновлены тесты assign-outline.
+
 ## [0.6.0] - 2025-11-30
 ### Added
 - Конфигурация gateway получила `upstream_mode` (fake/outline) и примеры в `.env.example`, `docker-compose.yml`, `config/example-config.yaml`.

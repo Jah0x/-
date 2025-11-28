@@ -17,9 +17,9 @@
 
 ### POST /api/v1/nodes/assign-outline
 - Вход: `{ "device_id": "string", "region_code": "string|null" }`
-- Логика: ищет активные Outline-ноды в указанном регионе, при отсутствии — берёт любую активную ноду. Возвращает первую подходящую по возрастанию id.
-- Успех: `{ "node_id": int, "host": "string", "port": int, "method": "string|null", "password": "string|null", "region": "string|null" }`.
-- Ошибка: HTTP 503 с `{ "detail": "no_outline_nodes_available" }`, если нет активных нод.
+- Логика: ищет активные Outline-ноды в указанном регионе, при отсутствии — берёт любую активную ноду (с учётом `priority`). При наличии `api_url`/`api_key` создаёт на Outline сервере персональный access-key и сохраняет его в БД.
+- Успех: `{ "node_id": int, "host": "string", "port": int, "method": "string|null", "password": "string|null", "region": "string|null", "access_key_id": "string|null", "access_url": "string|null" }`.
+- Ошибка: HTTP 503 с `{ "detail": "no_outline_nodes_available" }`, если нет активных нод, либо текстом ошибки провижининга Outline.
 
 ### POST /api/v1/usage/report
 - Вход: `{ "session_id": int|null, "device_id": "string", "bytes_up": int, "bytes_down": int }`
@@ -42,6 +42,7 @@
 - Регион (`regions`): id, code, name.
 - Устройство (`devices`): id, user_id, device_id, created_at.
 - Подписка (`subscriptions`): id, user_id, plan_id, valid_until, status, created_at, updated_at.
-- Outline-нода (`outline_nodes`): id, region_id, host, port, method, password, is_active, last_heartbeat_at.
+- Outline-нода (`outline_nodes`): id, name, region_id, host, port, method, password, api_url, api_key, tag, priority, is_active, is_deleted, last_heartbeat_at.
+- Outline-ключ (`outline_access_keys`): id, device_id, outline_node_id, access_key_id, password, method, port, access_url, revoked, created_at.
 - Gateway-нода (`gateway_nodes`): id, region_id, host, port, is_active, last_heartbeat_at.
 - Сессия (`sessions`): id, device_id, outline_node_id, gateway_node_id, started_at, ended_at, bytes_up, bytes_down, status.

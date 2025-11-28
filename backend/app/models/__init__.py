@@ -7,6 +7,7 @@ from app.models.region import Region
 from app.models.outline_node import OutlineNode
 from app.models.gateway_node import GatewayNode
 from app.models.session import Session
+from app.models.outline_access_key import OutlineAccessKey
 
 __all__ = [
     "Base",
@@ -19,4 +20,5 @@ __all__ = [
     "OutlineNode",
     "GatewayNode",
     "Session",
+    "OutlineAccessKey",
 ]

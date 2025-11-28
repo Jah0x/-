@@ -98,7 +98,7 @@ func (h *Handler) Handle(ctx context.Context, conn *websocket.Conn) {
 			h.sendError(conn, "outline_unavailable", "no_outline_nodes_available")
 			return
 		}
-		nodeConfig = upstream.OutlineNodeConfig{NodeID: assignment.NodeID, Host: assignment.Host, Port: assignment.Port, Method: assignment.Method, Password: assignment.Password, Region: assignment.Region}
+		nodeConfig = upstream.OutlineNodeConfig{NodeID: assignment.NodeID, Host: assignment.Host, Port: assignment.Port, Method: assignment.Method, Password: assignment.Password, Region: assignment.Region, AccessKeyID: assignment.AccessKeyID, AccessURL: assignment.AccessURL}
 	}
 	session, err = h.Sessions.CreateSession(hello.DeviceID)
 	if err != nil {

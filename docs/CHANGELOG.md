@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.10.0] - 2026-05-06
+### Added
+- Продакшн Dockerfile для backend и gateway с безопасным запуском через gunicorn и статический Go-бинарник.
+- Kubernetes-манифесты в `deploy/k8s` для backend и gateway, пример секретов для DSN и TLS, цели в Makefile для их применения.
+- CI/CD workflow на GitHub Actions с прогоном тестов и публикацией продакшн-образов в GHCR.
+
 ## [0.9.2] - 2026-04-05
 ### Added
 - Расширены метрики gateway: счётчики подключений/handshake по исходам, длительность handshake и сессий, ошибки потоков/протокола, upstream операции, открытие/закрытие потоков и трафик.

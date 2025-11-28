@@ -1,0 +1,62 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: httvps-observability
+spec:
+  groups:
+    - name: gateway
+      rules:
+        - alert: GatewayHandshakeErrorRateHigh
+          expr: sum(rate(httvps_gateway_handshakes_total{result!="accepted"}[5m])) by ()
+            /
+            sum(rate(httvps_gateway_handshakes_total[5m])) by () > 0.05
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Gateway handshake error rate >5%"
+            description: "Handshake failures exceed threshold over 10m window."
+        - alert: GatewayUpstreamErrorsSpike
+          expr: sum(rate(httvps_gateway_upstream_errors_total[5m])) by (operation) > 5
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Gateway upstream errors spike"
+            description: "High upstream error rate detected in the gateway for {{ $labels.operation }}."
+        - alert: GatewaySessionDurationAnomaly
+          expr: histogram_quantile(0.95, rate(httvps_gateway_session_duration_seconds_bucket[15m])) < 10
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Short gateway sessions"
+            description: "95th percentile session duration dropped below 10s."
+    - name: backend
+      rules:
+        - alert: BackendHighLatencyP95
+          expr: histogram_quantile(0.95, rate(backend_http_request_duration_seconds_bucket[5m])) > 0.5
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Backend p95 latency above 500ms"
+            description: "Long-running backend requests observed."
+        - alert: BackendRequestErrorRate
+          expr: sum(rate(backend_http_requests_total{status=~"5.."}[5m])) by ()
+            /
+            sum(rate(backend_http_requests_total[5m])) by () > 0.02
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Backend 5xx rate above 2%"
+            description: "Increased 5xx responses from backend."
+        - alert: BackendExceptionSpike
+          expr: sum(rate(backend_http_request_exceptions_total[5m])) by () > 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Backend exception spike"
+            description: "Unhandled exceptions observed in backend handlers."

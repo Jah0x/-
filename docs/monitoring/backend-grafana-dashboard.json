@@ -1,0 +1,64 @@
+{
+  "title": "HTTVPS Backend",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "In-flight requests",
+      "id": 1,
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [{"expr": "backend_http_requests_in_progress"}],
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0}
+    },
+    {
+      "type": "timeSeries",
+      "title": "Requests per route",
+      "id": 2,
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [
+        {"expr": "sum(rate(backend_http_requests_total[5m])) by (path)", "legendFormat": "{{path}}"}
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 6, "y": 0}
+    },
+    {
+      "type": "timeSeries",
+      "title": "Latency p95",
+      "id": 3,
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(backend_http_request_duration_seconds_bucket[5m]))",
+          "legendFormat": "p95"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4}
+    },
+    {
+      "type": "timeSeries",
+      "title": "5xx rate",
+      "id": 4,
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [
+        {
+          "expr": "sum(rate(backend_http_requests_total{status=~\"5..\"}[5m])) by ()",
+          "legendFormat": "5xx"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+    },
+    {
+      "type": "timeSeries",
+      "title": "Handler exceptions",
+      "id": 5,
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [
+        {"expr": "rate(backend_http_request_exceptions_total[5m])", "legendFormat": "exceptions"}
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+    }
+  ],
+  "time": {"from": "now-6h", "to": "now"},
+  "timepicker": {}
+}

@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.9.2] - 2026-04-05
+### Added
+- Расширены метрики gateway: счётчики подключений/handshake по исходам, длительность handshake и сессий, ошибки потоков/протокола, upstream операции, открытие/закрытие потоков и трафик.
+- Backend получил middleware для трассировки `X-Request-ID`, улучшенное JSON-логирование с `request_id` и Prometheus-метрики `/metrics` для latency, in-progress, кодов ответов и исключений.
+- Добавлены готовые PrometheusRule алерты и Grafana дашборды для gateway/backend (`docs/monitoring/*`).
+
 ## [0.9.1] - 2026-03-20
 ### Added
 - В backend добавлены модели пулов Outline и региональные связи (`outline_pools`, `outline_pool_nodes`, `outline_pool_regions`), расширен assign-outline запросом `pool_code` и сервисом выбора ноды по пулу.

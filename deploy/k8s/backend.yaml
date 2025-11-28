@@ -1,0 +1,77 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: httvps-backend
+  namespace: httvps
+spec:
+  selector:
+    app: httvps-backend
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: httvps-backend
+  namespace: httvps
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: httvps-backend
+  template:
+    metadata:
+      labels:
+        app: httvps-backend
+    spec:
+      containers:
+      - name: backend
+        image: ghcr.io/example/httvps-backend:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+        env:
+        - name: BACKEND_DB_DSN
+          valueFrom:
+            secretKeyRef:
+              name: httvps-backend-secrets
+              key: BACKEND_DB_DSN
+        - name: BACKEND_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: httvps-backend-secrets
+              key: BACKEND_SECRET_KEY
+        - name: BACKEND_GATEWAY_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: httvps-backend-secrets
+              key: BACKEND_GATEWAY_SECRET
+        - name: BACKEND_PORT
+          value: "8000"
+        - name: BACKEND_HOST
+          value: "0.0.0.0"
+        - name: HTTVPS_GATEWAY_URL
+          value: https://httvps-gateway:8443/ws
+        - name: OUTLINE_DEFAULT_POOL_CODE
+          value: default
+        readinessProbe:
+          httpGet:
+            path: /api/v1/health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /api/v1/health
+            port: 8000
+          initialDelaySeconds: 20
+          periodSeconds: 20
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi

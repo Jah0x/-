@@ -1,3 +1,4 @@
+import logging
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -15,6 +16,9 @@ class NoOutlineNodesAvailable(Exception):
 
 class OutlineProvisioningError(Exception):
     pass
+
+
+logger = logging.getLogger(__name__)
 
 
 async def assign_outline_node(session: AsyncSession, region_code: str | None, device_identifier: str, client_class: type[OutlineClient] = OutlineClient) -> OutlineNodeAssignment:
@@ -79,3 +83,28 @@ async def assign_outline_node(session: AsyncSession, region_code: str | None, de
         access_key_id=access_key_id,
         access_url=access_url,
     )
+
+
+async def revoke_outline_key(session: AsyncSession, device_identifier: str, client_class: type[OutlineClient] | None = OutlineClient) -> bool:
+    device = await session.scalar(select(Device).where(Device.device_id == device_identifier))
+    if not device:
+        raise OutlineProvisioningError("device_not_found")
+    query = (
+        select(OutlineAccessKey)
+        .options(selectinload(OutlineAccessKey.outline_node))
+        .where(OutlineAccessKey.device_id == device.id, OutlineAccessKey.revoked.is_(False))
+        .order_by(OutlineAccessKey.created_at.desc())
+    )
+    access_key = await session.scalar(query)
+    if not access_key:
+        return False
+    access_key.revoked = True
+    await session.commit()
+    node = access_key.outline_node
+    if node and node.api_url and node.api_key and client_class:
+        client = client_class(node.api_url, node.api_key)
+        try:
+            await client.delete_key(access_key.access_key_id)
+        except OutlineClientError:
+            logger.warning("outline_delete_key_failed", exc_info=True)
+    return True

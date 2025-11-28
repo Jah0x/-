@@ -7,10 +7,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/httvps/httvps/gateway/internal/auth"
 	"github.com/httvps/httvps/gateway/internal/config"
+	"github.com/httvps/httvps/gateway/internal/httvps"
 	"github.com/httvps/httvps/gateway/internal/metrics"
-	"github.com/httvps/httvps/gateway/internal/nodes"
 	"github.com/httvps/httvps/gateway/internal/protocol"
 	"github.com/httvps/httvps/gateway/internal/server"
 	"github.com/httvps/httvps/gateway/internal/sessions"
@@ -25,8 +24,7 @@ func main() {
 	}
 	logger := newLogger(cfg.LogFormat, cfg.LogLevel)
 	m := metrics.New(cfg.MetricsEnabled, cfg.MetricsPath)
-	authClient := auth.NewClient(cfg.BackendBaseURL, cfg.BackendTimeout)
-	nodesClient := nodes.NewClient(cfg.BackendBaseURL, cfg.BackendTimeout)
+	validator := httvps.NewClient(cfg.BackendBaseURL, cfg.BackendTimeout, cfg.BackendSecret)
 	sessionManager := sessions.NewManager(cfg.MaxStreamsPerSession)
 	var up upstream.Upstream
 	switch cfg.UpstreamMode {
@@ -35,7 +33,7 @@ func main() {
 	default:
 		up = upstream.NewFakeUpstream(true)
 	}
-	handler := &protocol.Handler{AuthClient: authClient, NodesClient: nodesClient, Sessions: sessionManager, Upstream: up, Metrics: m, Logger: logger, UpstreamMode: cfg.UpstreamMode}
+	handler := &protocol.Handler{Validator: validator, Sessions: sessionManager, Upstream: up, Metrics: m, Logger: logger, Version: "1"}
 	logger.Info("upstream_mode", slog.String("mode", cfg.UpstreamMode))
 	srv := server.New(cfg, handler, m, logger)
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

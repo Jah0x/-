@@ -1,39 +1,33 @@
 # HTTVPS Protocol
 
 ## Purpose
-Туннель поверх HTTPS (WebSocket/HTTP/2) с мультиплексированными потоками, маскирующийся под обычный TLS-трафик.
+Туннель поверх HTTPS (WebSocket) с мультиплексированными потоками, маскирующийся под обычный TLS-трафик. Полная спецификация описана в `00-spec-httvps.md`.
 
 ## Handshake
-1. TLS соединение между клиентом и gateway.
-2. WebSocket upgrade на `/ws`.
-3. Клиент отправляет `hello` JSON-фрейм:
+1. TLS соединение и WebSocket upgrade на `/ws`.
+2. Клиент отправляет `hello` JSON-фрейм c временным токеном сессии:
    ```json
    {
      "type": "hello",
-     "device_id": "string",
-     "token": "jwt",
-     "client_version": "string",
-     "capabilities": ["string"],
-     "region": "string"
+     "session_token": "string",
+     "version": "1",
+     "client": "httvps-cli"
    }
    ```
-4. Gateway вызывает backend `/api/v1/auth/validate-device` и `/api/v1/nodes/assign-outline` (если выбран режим Outline). Успешный ответ:
+3. Gateway вызывает backend `/internal/httvps/validate-session`. Успех возвращает идентификатор сессии, лимиты и Outline-ноду. Ошибка завершается кадром `error` и закрытием соединения.
+4. При успехе gateway отправляет `ready`:
    ```json
-   {"type":"auth_result","allowed":true,"session_id":"uuid","subscription_status":"active"}
+   {"type":"ready","session_id":"uuid","max_streams":8}
    ```
-   При отказе: `{ "type":"auth_result","allowed":false,"reason":"invalid_token" }` и соединение закрывается. Ошибка назначения Outline-ноды возвращается кадром `error` с кодом `outline_unavailable`.
-5. После успеха клиент открывает потоки; конкретная Outline-нода закреплена за `session_id`, но её параметры не раскрываются клиенту.
+   После этого принимаются кадры потоков.
 
 ## Message/frame types
-- `hello` — стартовый кадр handshake.
-- `auth_result` — подтверждение/отказ сессии, `session_id` выдаётся gateway.
-- `stream_open` — `{ "type":"stream_open","stream_id":"s1","target":"optional" }`.
+- `ready` — подтверждение handshake и лимиты сессии.
+- `stream_open` — `{ "type":"stream_open","stream_id":"s1","target":"host:port" }`.
 - `stream_data` — `{ "type":"stream_data","stream_id":"s1","data":"base64" }`, данные кодируются base64.
 - `stream_close` — `{ "type":"stream_close","stream_id":"s1","reason":"optional" }`.
 - `ping` / `pong` — keepalive.
-- `error` — `{ "type":"error","code":"string","message":"string" }`, например `outline_unavailable` при невозможности выбрать ноду.
+- `error` — `{ "type":"error","code":"string","message":"string" }`.
 
 ## Transport
-- Все кадры — JSON поверх WebSocket (text), соединение защищено TLS.
-- В версии MVP payload передаётся в base64, binary-фреймы будут добавлены в оптимизациях.
-
+Все кадры — JSON поверх WebSocket (text), соединение защищено TLS. Первое сообщение после `stream_open` должно содержать Shadowsocks address header перед полезной нагрузкой, чтобы Outline upstream установил TCP к целевому хосту.

@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     outline_healthcheck_interval_seconds: int = Field(default=60, alias="OUTLINE_HEALTHCHECK_INTERVAL_SECONDS")
     outline_healthcheck_timeout_seconds: float = Field(default=5.0, alias="OUTLINE_HEALTHCHECK_TIMEOUT_SECONDS")
     outline_healthcheck_degraded_threshold_ms: int = Field(default=1500, alias="OUTLINE_HEALTHCHECK_DEGRADED_THRESHOLD_MS")
+    httvps_gateway_url: str = Field(default="https://localhost:8443/ws", alias="HTTVPS_GATEWAY_URL")
+    httvps_session_ttl_seconds: int = Field(default=600, alias="HTTVPS_SESSION_TTL_SECONDS")
+    httvps_max_streams: int = Field(default=8, alias="HTTVPS_MAX_STREAMS")
+    gateway_internal_secret: str = Field(default="", alias="BACKEND_GATEWAY_SECRET")
 
 
 @lru_cache

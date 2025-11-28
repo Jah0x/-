@@ -7,30 +7,24 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/httvps/httvps/gateway/internal/auth"
+	"github.com/httvps/httvps/gateway/internal/httvps"
 	"github.com/httvps/httvps/gateway/internal/metrics"
-	"github.com/httvps/httvps/gateway/internal/nodes"
 	"github.com/httvps/httvps/gateway/internal/sessions"
 	"github.com/httvps/httvps/gateway/internal/upstream"
 	"golang.org/x/exp/slog"
 )
 
-type AuthClient interface {
-	ValidateDevice(ctx context.Context, req auth.ValidateDeviceRequest) (auth.ValidateDeviceResult, error)
-}
-
-type NodesClient interface {
-	AssignOutlineNode(ctx context.Context, req nodes.AssignOutlineRequest) (nodes.AssignOutlineResponse, error)
+type SessionValidator interface {
+	ValidateSession(ctx context.Context, token string) (httvps.ValidateSessionResponse, error)
 }
 
 type Handler struct {
-	AuthClient   AuthClient
-	NodesClient  NodesClient
-	Sessions     *sessions.Manager
-	Upstream     upstream.Upstream
-	Metrics      *metrics.Metrics
-	Logger       *slog.Logger
-	UpstreamMode string
+	Validator SessionValidator
+	Sessions  *sessions.Manager
+	Upstream  upstream.Upstream
+	Metrics   *metrics.Metrics
+	Logger    *slog.Logger
+	Version   string
 }
 
 func (h *Handler) Handle(ctx context.Context, conn *websocket.Conn) {
@@ -63,7 +57,15 @@ func (h *Handler) Handle(ctx context.Context, conn *websocket.Conn) {
 		h.sendError(conn, "bad_hello", "invalid hello")
 		return
 	}
-	authResult, authErr := h.AuthClient.ValidateDevice(ctx, auth.ValidateDeviceRequest{DeviceID: hello.DeviceID, Token: hello.Token})
+	if hello.Version == "" {
+		h.sendError(conn, "bad_hello", "missing version")
+		return
+	}
+	if h.Version != "" && hello.Version != h.Version {
+		h.sendError(conn, "bad_version", "unsupported version")
+		return
+	}
+	validation, authErr := h.Validator.ValidateSession(ctx, hello.SessionToken)
 	duration := time.Since(handshakeStart).Seconds()
 	if h.Metrics != nil && h.Metrics.MetricsEnabled {
 		h.Metrics.HandshakeDuration.Observe(duration)
@@ -73,38 +75,15 @@ func (h *Handler) Handle(ctx context.Context, conn *websocket.Conn) {
 			h.Metrics.HandshakeTotal.WithLabelValues("error").Inc()
 			h.Metrics.BackendErrors.WithLabelValues("auth_error").Inc()
 		}
-		h.sendAuthResult(conn, AuthResultFrame{Type: FrameAuthResult, Allowed: false, Reason: authErr.Error()})
+		h.sendError(conn, "auth_failed", authErr.Error())
 		return
 	}
-	if !authResult.Allowed {
-		if h.Metrics != nil && h.Metrics.MetricsEnabled {
-			h.Metrics.HandshakeTotal.WithLabelValues("rejected").Inc()
-		}
-		h.sendAuthResult(conn, AuthResultFrame{Type: FrameAuthResult, Allowed: false, Reason: authResult.Reason, SubscriptionStatus: authResult.SubscriptionStatus})
-		return
-	}
-	var nodeConfig upstream.OutlineNodeConfig
-	if h.UpstreamMode == "outline" {
-		if h.NodesClient == nil {
-			h.sendError(conn, "outline_unavailable", "outline client not configured")
-			return
-		}
-		assignment, assignErr := h.NodesClient.AssignOutlineNode(ctx, nodes.AssignOutlineRequest{RegionCode: hello.Region, DeviceID: hello.DeviceID})
-		if assignErr != nil {
-			if h.Metrics != nil && h.Metrics.MetricsEnabled {
-				h.Metrics.HandshakeTotal.WithLabelValues("error").Inc()
-				h.Metrics.BackendErrors.WithLabelValues("assign_error").Inc()
-			}
-			h.sendError(conn, "outline_unavailable", "no_outline_nodes_available")
-			return
-		}
-		nodeConfig = upstream.OutlineNodeConfig{NodeID: assignment.NodeID, Host: assignment.Host, Port: assignment.Port, Method: assignment.Method, Password: assignment.Password, Region: assignment.Region, AccessKeyID: assignment.AccessKeyID, AccessURL: assignment.AccessURL}
-	}
-	session, err = h.Sessions.CreateSession(hello.DeviceID)
+	session, err = h.Sessions.CreateSessionWithID(validation.SessionID, validation.DeviceID, validation.MaxStreams)
 	if err != nil {
 		h.sendError(conn, "session_error", "failed to create session")
 		return
 	}
+	nodeConfig := upstream.OutlineNodeConfig{NodeID: validation.Outline.NodeID, Host: validation.Outline.Host, Port: validation.Outline.Port, Method: validation.Outline.Method, Password: validation.Outline.Password, Region: validation.Outline.Region, AccessKeyID: validation.Outline.AccessKeyID, AccessURL: validation.Outline.AccessURL}
 	if err := h.Upstream.BindSession(ctx, session.ID, nodeConfig); err != nil {
 		h.sendError(conn, "session_error", "failed to bind upstream")
 		return
@@ -114,9 +93,9 @@ func (h *Handler) Handle(ctx context.Context, conn *websocket.Conn) {
 		h.Metrics.HandshakeTotal.WithLabelValues("accepted").Inc()
 	}
 	if h.Logger != nil {
-		h.Logger.Info("session_started", slog.String("device_id", hello.DeviceID), slog.String("session_id", session.ID), slog.String("region", nodeConfig.Region), slog.Int("node_id", nodeConfig.NodeID))
+		h.Logger.Info("session_started", slog.String("device_id", session.DeviceID), slog.String("session_id", session.ID), slog.String("region", nodeConfig.Region), slog.Int("node_id", nodeConfig.NodeID))
 	}
-	h.sendAuthResult(conn, AuthResultFrame{Type: FrameAuthResult, Allowed: true, SessionID: session.ID, SubscriptionStatus: authResult.SubscriptionStatus})
+	h.sendFrame(conn, ReadyFrame{Type: FrameReady, SessionID: session.ID, MaxStreams: session.MaxStreams})
 	for {
 		data, err := h.readMessage(conn)
 		if err != nil {
@@ -203,8 +182,4 @@ func (h *Handler) sendFrame(conn *websocket.Conn, frame any) {
 
 func (h *Handler) sendError(conn *websocket.Conn, code string, message string) {
 	h.sendFrame(conn, ErrorFrame{Type: FrameError, Code: code, Message: message})
-}
-
-func (h *Handler) sendAuthResult(conn *websocket.Conn, frame AuthResultFrame) {
-	h.sendFrame(conn, frame)
 }

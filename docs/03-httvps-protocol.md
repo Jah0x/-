@@ -29,5 +29,16 @@
 - `ping` / `pong` — keepalive.
 - `error` — `{ "type":"error","code":"string","message":"string" }`.
 
+## SDK handshake
+- SDK открывает WebSocket и сразу отправляет `hello` с `session_token`, `version` и произвольным `client`.
+- Успешный `ready` сохраняет `session_id` и `max_streams`, после чего запускается приём событий с автоматическим ответом `pong`.
+- Если `ready` не приходит, соединение завершается с ошибкой `handshake_failed`.
+
+## SDK управление потоками
+- Клиент автоматически нумерует потоки `s1`, `s2`, ... если идентификатор не передан явно.
+- При превышении `max_streams` выбрасывается ошибка `stream_limit` без отправки `stream_open`.
+- Все вызовы `send_data` кодируют байты в base64 и отправляют `stream_data` только для активных потоков, иначе ошибка `unknown_stream`.
+- `next_event(timeout)` возвращает любые входящие кадры (включая `stream_close` и `error`); для `ping` отправляется `pong` и событие не возвращается пользователю.
+
 ## Transport
 Все кадры — JSON поверх WebSocket (text), соединение защищено TLS. Первое сообщение после `stream_open` должно содержать Shadowsocks address header перед полезной нагрузкой, чтобы Outline upstream установил TCP к целевому хосту.

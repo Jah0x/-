@@ -8,6 +8,9 @@ from app.models.outline_node import OutlineNode
 from app.models.gateway_node import GatewayNode
 from app.models.session import Session
 from app.models.outline_access_key import OutlineAccessKey
+from app.models.outline_pool import OutlinePool
+from app.models.outline_pool_node import OutlinePoolNode
+from app.models.outline_pool_region import OutlinePoolRegion
 
 __all__ = [
     "Base",
@@ -21,4 +24,7 @@ __all__ = [
     "GatewayNode",
     "Session",
     "OutlineAccessKey",
+    "OutlinePool",
+    "OutlinePoolNode",
+    "OutlinePoolRegion",
 ]

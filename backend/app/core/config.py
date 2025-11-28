@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     httvps_session_ttl_seconds: int = Field(default=600, alias="HTTVPS_SESSION_TTL_SECONDS")
     httvps_max_streams: int = Field(default=8, alias="HTTVPS_MAX_STREAMS")
     gateway_internal_secret: str = Field(default="", alias="BACKEND_GATEWAY_SECRET")
+    outline_default_pool_code: str | None = Field(default=None, alias="OUTLINE_DEFAULT_POOL_CODE")
 
 
 @lru_cache

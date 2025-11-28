@@ -83,7 +83,8 @@ func (h *Handler) Handle(ctx context.Context, conn *websocket.Conn) {
 		h.sendError(conn, "session_error", "failed to create session")
 		return
 	}
-	nodeConfig := upstream.OutlineNodeConfig{NodeID: validation.Outline.NodeID, Host: validation.Outline.Host, Port: validation.Outline.Port, Method: validation.Outline.Method, Password: validation.Outline.Password, Region: validation.Outline.Region, AccessKeyID: validation.Outline.AccessKeyID, AccessURL: validation.Outline.AccessURL}
+	defer h.Upstream.UnbindSession(ctx, session.ID)
+	nodeConfig := upstream.OutlineNodeConfig{NodeID: validation.Outline.NodeID, Host: validation.Outline.Host, Port: validation.Outline.Port, Method: validation.Outline.Method, Password: validation.Outline.Password, Region: validation.Outline.Region, Pool: validation.Outline.Pool, AccessKeyID: validation.Outline.AccessKeyID, AccessURL: validation.Outline.AccessURL}
 	if err := h.Upstream.BindSession(ctx, session.ID, nodeConfig); err != nil {
 		h.sendError(conn, "session_error", "failed to bind upstream")
 		return

@@ -8,6 +8,7 @@ from app.models.outline_access_key import OutlineAccessKey
 from app.models.outline_node import OutlineNode
 from app.models.region import Region
 from app.services.outline_health_service import OutlineHealthStatus
+from app.services.outline_pool_service import collect_pool_nodes, OutlinePoolNotFound
 from app.schemas.nodes import OutlineNodeAssignment, OutlineNodeStatus
 
 
@@ -26,26 +27,33 @@ class OutlineProvisioningError(Exception):
 logger = logging.getLogger(__name__)
 
 
-async def assign_outline_node(session: AsyncSession, region_code: str | None, device_identifier: str, client_class: type[OutlineClient] = OutlineClient) -> OutlineNodeAssignment:
+async def assign_outline_node(session: AsyncSession, region_code: str | None, device_identifier: str, client_class: type[OutlineClient] = OutlineClient, pool_code: str | None = None) -> OutlineNodeAssignment:
     device = await session.scalar(select(Device).where(Device.device_id == device_identifier))
     if not device:
         raise OutlineProvisioningError("device_not_found")
     region = None
     if region_code:
         region = await session.scalar(select(Region).where(Region.code == region_code))
-    nodes: list[OutlineNode] = []
-    query = (
-        select(OutlineNode)
-        .options(selectinload(OutlineNode.region))
-        .where(OutlineNode.is_active.is_(True), OutlineNode.is_deleted.is_(False))
-        .order_by(OutlineNode.priority.is_(None), OutlineNode.priority, OutlineNode.id)
-    )
-    if region:
-        result = await session.scalars(query.where(OutlineNode.region_id == region.id))
-        nodes = result.all()
-    if not nodes:
-        result = await session.scalars(query)
-        nodes = result.all()
+    pool_value = None
+    nodes: list[OutlineNode]
+    if pool_code:
+        try:
+            pool, nodes = await collect_pool_nodes(session, pool_code, region_code)
+        except OutlinePoolNotFound:
+            raise OutlineProvisioningError("outline_pool_not_found")
+        pool_value = pool.code
+    else:
+        query = (
+            select(OutlineNode)
+            .options(selectinload(OutlineNode.region))
+            .where(OutlineNode.is_active.is_(True), OutlineNode.is_deleted.is_(False))
+            .order_by(OutlineNode.priority.is_(None), OutlineNode.priority, OutlineNode.id)
+        )
+        result = await session.scalars(query.where(OutlineNode.region_id == region.id)) if region else None
+        nodes = result.all() if result else []
+        if not nodes:
+            result = await session.scalars(query)
+            nodes = result.all()
     if not nodes:
         raise NoOutlineNodesAvailable()
     healthy_nodes = [
@@ -103,6 +111,7 @@ async def assign_outline_node(session: AsyncSession, region_code: str | None, de
         method=method,
         password=password,
         region=region_value,
+        pool=pool_value,
         access_key_id=access_key_id,
         access_url=access_url,
     )

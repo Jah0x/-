@@ -31,7 +31,7 @@ async def issue_session_descriptor(db: AsyncSession, device_id: str, token: str,
     if not validation.get("allowed"):
         return {"allowed": False, "reason": validation.get("reason", "not_allowed"), "subscription_status": validation.get("subscription_status")}
     try:
-        assignment = await assign_outline_node(db, region, device_id)
+        assignment = await assign_outline_node(db, region, device_id, pool_code=settings.outline_default_pool_code)
     except (OutlineProvisioningError, NoOutlineNodesAvailable, NoHealthyOutlineNodesError) as exc:
         return {"allowed": False, "reason": str(exc)}
     session_token = secrets.token_urlsafe(32)

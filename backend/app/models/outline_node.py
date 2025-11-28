@@ -28,3 +28,4 @@ class OutlineNode(Base):
     region: Mapped["Region"] = relationship("Region", back_populates="outline_nodes")
     sessions: Mapped[list["Session"]] = relationship("Session", back_populates="outline_node")
     access_keys: Mapped[list["OutlineAccessKey"]] = relationship("OutlineAccessKey", back_populates="outline_node")
+    pools: Mapped[list["OutlinePoolNode"]] = relationship("OutlinePoolNode", back_populates="outline_node")

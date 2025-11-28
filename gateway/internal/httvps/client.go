@@ -22,6 +22,7 @@ type OutlineDescriptor struct {
 	Method      string `json:"method"`
 	Password    string `json:"password"`
 	Region      string `json:"region"`
+	Pool        string `json:"pool"`
 	AccessKeyID string `json:"access_key_id"`
 	AccessURL   string `json:"access_url"`
 }

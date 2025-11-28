@@ -14,6 +14,8 @@ import (
 	"github.com/httvps/httvps/gateway/internal/server"
 	"github.com/httvps/httvps/gateway/internal/sessions"
 	"github.com/httvps/httvps/gateway/internal/upstream"
+	"github.com/nats-io/nats.go"
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/exp/slog"
 )
 
@@ -22,14 +24,40 @@ func main() {
 	if err != nil {
 		log.Fatalf("config error: %v", err)
 	}
+	ctx := context.Background()
 	logger := newLogger(cfg.LogFormat, cfg.LogLevel)
 	m := metrics.New(cfg.MetricsEnabled, cfg.MetricsPath)
 	validator := httvps.NewClient(cfg.BackendBaseURL, cfg.BackendTimeout, cfg.BackendSecret)
 	sessionManager := sessions.NewManager(cfg.MaxStreamsPerSession)
+	var store upstream.SessionStore = upstream.NewMemoryStore()
+	switch cfg.UpstreamStore {
+	case "redis":
+		if cfg.RedisAddr == "" {
+			log.Fatalf("redis addr required for store")
+		}
+		client := redis.NewClient(&redis.Options{Addr: cfg.RedisAddr, Username: cfg.RedisUsername, Password: cfg.RedisPassword, DB: cfg.RedisDB})
+		if err := client.Ping(ctx).Err(); err != nil {
+			log.Fatalf("redis ping error: %v", err)
+		}
+		store = upstream.NewRedisStore(client, cfg.SessionStoreTTL)
+	case "nats":
+		if cfg.NATSURL == "" {
+			log.Fatalf("nats url required for store")
+		}
+		conn, err := nats.Connect(cfg.NATSURL)
+		if err != nil {
+			log.Fatalf("nats connect error: %v", err)
+		}
+		kv, err := upstream.NewNATSStore(conn, cfg.NATSBucket, cfg.SessionStoreTTL)
+		if err != nil {
+			log.Fatalf("nats store error: %v", err)
+		}
+		store = kv
+	}
 	var up upstream.Upstream
 	switch cfg.UpstreamMode {
 	case "outline":
-		up = upstream.NewOutlineUpstream(cfg.BackendTimeout)
+		up = upstream.NewOutlineUpstreamWithStore(cfg.BackendTimeout, store)
 	default:
 		up = upstream.NewFakeUpstream(true)
 	}

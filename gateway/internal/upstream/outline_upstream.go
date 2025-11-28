@@ -47,20 +47,40 @@ type OutlineUpstream struct {
 	streams   map[string]map[string]net.Conn
 	dialer    outlineDialer
 	ioTimeout time.Duration
+	store     SessionStore
 }
 
 func NewOutlineUpstream(timeout time.Duration) *OutlineUpstream {
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
-	return newOutlineUpstreamWithDialer(timeout, &shadowsocksDialer{})
+	return newOutlineUpstreamWithDialerAndStore(timeout, &shadowsocksDialer{}, NewMemoryStore())
+}
+
+func NewOutlineUpstreamWithStore(timeout time.Duration, store SessionStore) *OutlineUpstream {
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
+	if store == nil {
+		store = NewMemoryStore()
+	}
+	return newOutlineUpstreamWithDialerAndStore(timeout, &shadowsocksDialer{}, store)
 }
 
 func newOutlineUpstreamWithDialer(timeout time.Duration, dialer outlineDialer) *OutlineUpstream {
-	return &OutlineUpstream{sessions: make(map[string]OutlineNodeConfig), streams: make(map[string]map[string]net.Conn), dialer: dialer, ioTimeout: timeout}
+	return newOutlineUpstreamWithDialerAndStore(timeout, dialer, NewMemoryStore())
+}
+
+func newOutlineUpstreamWithDialerAndStore(timeout time.Duration, dialer outlineDialer, store SessionStore) *OutlineUpstream {
+	return &OutlineUpstream{sessions: make(map[string]OutlineNodeConfig), streams: make(map[string]map[string]net.Conn), dialer: dialer, ioTimeout: timeout, store: store}
 }
 
 func (o *OutlineUpstream) BindSession(ctx context.Context, sessionID string, node OutlineNodeConfig) error {
+	if o.store != nil {
+		if err := o.store.Save(ctx, sessionID, node); err != nil {
+			return err
+		}
+	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.sessions[sessionID] = node
@@ -70,8 +90,29 @@ func (o *OutlineUpstream) BindSession(ctx context.Context, sessionID string, nod
 	return nil
 }
 
+func (o *OutlineUpstream) UnbindSession(ctx context.Context, sessionID string) error {
+	o.mu.Lock()
+	if streams, ok := o.streams[sessionID]; ok {
+		for _, conn := range streams {
+			conn.Close()
+		}
+		delete(o.streams, sessionID)
+	}
+	delete(o.sessions, sessionID)
+	o.mu.Unlock()
+	if o.store != nil {
+		if err := o.store.Delete(ctx, sessionID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (o *OutlineUpstream) OpenStream(ctx context.Context, sessionID string, streamID string) error {
-	node, ok := o.sessionNode(sessionID)
+	node, ok, err := o.sessionNode(ctx, sessionID)
+	if err != nil {
+		return err
+	}
 	if !ok {
 		return errors.New("session_not_bound")
 	}
@@ -141,11 +182,27 @@ func (o *OutlineUpstream) CloseStream(ctx context.Context, sessionID string, str
 	return nil
 }
 
-func (o *OutlineUpstream) sessionNode(sessionID string) (OutlineNodeConfig, bool) {
+func (o *OutlineUpstream) sessionNode(ctx context.Context, sessionID string) (OutlineNodeConfig, bool, error) {
 	o.mu.Lock()
-	defer o.mu.Unlock()
 	node, ok := o.sessions[sessionID]
-	return node, ok
+	o.mu.Unlock()
+	if ok {
+		return node, true, nil
+	}
+	if o.store == nil {
+		return OutlineNodeConfig{}, false, nil
+	}
+	stored, found, err := o.store.Load(ctx, sessionID)
+	if err != nil || !found {
+		return stored, found, err
+	}
+	o.mu.Lock()
+	o.sessions[sessionID] = stored
+	if _, ok := o.streams[sessionID]; !ok {
+		o.streams[sessionID] = make(map[string]net.Conn)
+	}
+	o.mu.Unlock()
+	return stored, true, nil
 }
 
 func (o *OutlineUpstream) getStream(sessionID string, streamID string) (net.Conn, error) {

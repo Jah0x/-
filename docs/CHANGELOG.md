@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1] - 2026-03-20
+### Added
+- В backend добавлены модели пулов Outline и региональные связи (`outline_pools`, `outline_pool_nodes`, `outline_pool_regions`), расширен assign-outline запросом `pool_code` и сервисом выбора ноды по пулу.
+- Настройки backend получили `OUTLINE_DEFAULT_POOL_CODE`, чтобы выдавать сессии из нужного пула по умолчанию.
+- Gateway OutlineUpstream хранит привязки сессий в сторе (memory/Redis/NATS), при подключении вытягивает состояние из внешнего стора и чистит его через `UnbindSession`.
+- Обновлены описание архитектуры и раздел Outline pool с деталями по пулам, сторам и кодам ошибок.
+
 ## [0.9.0] - 2026-02-10
 ### Added
 - Завершена спецификация HTTVPS: определён handshake с session_token, коды ошибок, лимиты потоков и правила работы с Outline.

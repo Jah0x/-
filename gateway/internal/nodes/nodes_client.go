@@ -12,6 +12,7 @@ import (
 
 type AssignOutlineRequest struct {
 	RegionCode string `json:"region_code,omitempty"`
+	PoolCode   string `json:"pool_code,omitempty"`
 	DeviceID   string `json:"device_id"`
 }
 
@@ -22,6 +23,7 @@ type AssignOutlineResponse struct {
 	Method      string `json:"method,omitempty"`
 	Password    string `json:"password,omitempty"`
 	Region      string `json:"region,omitempty"`
+	Pool        string `json:"pool,omitempty"`
 	AccessKeyID string `json:"access_key_id,omitempty"`
 	AccessURL   string `json:"access_url,omitempty"`
 }

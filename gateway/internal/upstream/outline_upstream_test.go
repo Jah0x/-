@@ -68,3 +68,35 @@ func TestOutlineUpstreamMissingSession(t *testing.T) {
 		t.Fatalf("expected error for missing session")
 	}
 }
+
+func TestOutlineUpstreamLoadsFromStore(t *testing.T) {
+	dialer := &pipeDialer{}
+	store := NewMemoryStore()
+	cached := OutlineNodeConfig{Host: "localhost", Port: 1, Pool: "edge"}
+	if err := store.Save(context.Background(), "s1", cached); err != nil {
+		t.Fatalf("store error: %v", err)
+	}
+	up := newOutlineUpstreamWithDialerAndStore(time.Second, dialer, store)
+	if err := up.OpenStream(context.Background(), "s1", "st1"); err != nil {
+		t.Fatalf("open stream error: %v", err)
+	}
+	serverConn := dialer.take()
+	if serverConn == nil {
+		t.Fatalf("server connection missing")
+	}
+	go func() {
+		buf := make([]byte, 4)
+		serverConn.Read(buf)
+		serverConn.Write([]byte("pong"))
+	}()
+	resp, err := up.Write(context.Background(), "s1", "st1", []byte("ping"))
+	if err != nil {
+		t.Fatalf("write error: %v", err)
+	}
+	if string(resp) != "pong" {
+		t.Fatalf("unexpected response: %s", string(resp))
+	}
+	if err := up.UnbindSession(context.Background(), "s1"); err != nil {
+		t.Fatalf("unbind error: %v", err)
+	}
+}

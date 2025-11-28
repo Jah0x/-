@@ -11,3 +11,4 @@ class Region(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     outline_nodes: Mapped[list["OutlineNode"]] = relationship("OutlineNode", back_populates="region")
     gateway_nodes: Mapped[list["GatewayNode"]] = relationship("GatewayNode", back_populates="region")
+    pool_regions: Mapped[list["OutlinePoolRegion"]] = relationship("OutlinePoolRegion", back_populates="region")

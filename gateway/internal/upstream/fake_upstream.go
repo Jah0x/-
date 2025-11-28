@@ -27,6 +27,14 @@ func (f *FakeUpstream) BindSession(ctx context.Context, sessionID string, node O
 	return nil
 }
 
+func (f *FakeUpstream) UnbindSession(ctx context.Context, sessionID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.sessions, sessionID)
+	delete(f.streams, sessionID)
+	return nil
+}
+
 func (f *FakeUpstream) OpenStream(ctx context.Context, sessionID string, streamID string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

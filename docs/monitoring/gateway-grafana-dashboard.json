@@ -1,0 +1,70 @@
+{
+  "title": "HTTVPS Gateway",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Active sessions",
+      "id": 1,
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [{"expr": "httvps_gateway_active_sessions"}],
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0}
+    },
+    {
+      "type": "stat",
+      "title": "Active streams",
+      "id": 2,
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [{"expr": "httvps_gateway_active_streams"}],
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0}
+    },
+    {
+      "type": "timeSeries",
+      "title": "Handshake outcomes",
+      "id": 3,
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [
+        {"expr": "rate(httvps_gateway_handshakes_total[5m])", "legendFormat": "{{result}}"}
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4}
+    },
+    {
+      "type": "timeSeries",
+      "title": "Upstream errors",
+      "id": 4,
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [
+        {"expr": "rate(httvps_gateway_upstream_errors_total[5m])", "legendFormat": "{{operation}}"}
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12}
+    },
+    {
+      "type": "timeSeries",
+      "title": "Traffic",
+      "id": 5,
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [
+        {"expr": "rate(httvps_gateway_bytes_in_total[5m])", "legendFormat": "bytes_in"},
+        {"expr": "rate(httvps_gateway_bytes_out_total[5m])", "legendFormat": "bytes_out"}
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+    },
+    {
+      "type": "timeSeries",
+      "title": "Session duration p95",
+      "id": 6,
+      "datasource": {"type": "prometheus", "uid": "Prometheus"},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(httvps_gateway_session_duration_seconds_bucket[5m]))",
+          "legendFormat": "p95"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+    }
+  ],
+  "time": {"from": "now-6h", "to": "now"},
+  "timepicker": {}
+}

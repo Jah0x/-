@@ -39,5 +39,9 @@
 - Docker Compose поднимает PostgreSQL, backend и gateway; `.env.example` содержит шаблон значений, `deploy/certs` содержит dev-TLS для gateway.
 
 ## Логирование и метрики
-- Backend: JSON-логи через `core.logging.configure_logging`, уровень задаётся `BACKEND_DEBUG`.
-- Gateway: slog JSON/Text с уровнем `GATEWAY_LOG_LEVEL` и метрики Prometheus на `/metrics` при включённом `GATEWAY_METRICS_ENABLED`.
+- Backend: JSON-логи через `core.logging.configure_logging`, уровень задаётся `BACKEND_DEBUG`; middleware `RequestContextMiddleware` выдаёт `X-Request-ID` и прокидывает его в логи; `MetricsMiddleware` снимает latency, in-progress, счётчики по методам/путям/кодам и исключения, экспорт на `/metrics` в Prometheus-формате.
+- Gateway: slog JSON/Text с уровнем `GATEWAY_LOG_LEVEL` и метрики Prometheus на `/metrics` при включённом `GATEWAY_METRICS_ENABLED`; добавлены гистограммы длительности handshake и сессий, счётчики итогов handshake и подключений, открытий/закрытий потоков, ошибок потоков/протокола и upstream ошибок с разбивкой по операциям, трафик in/out и backend ошибки.
+
+## Наблюдаемость, дашборды и алерты
+- PrometheusRule манифест `docs/monitoring/prometheus-rules.yaml` поднимает алерты по error-rate handshake/5xx, всплескам upstream ошибок, низкой длительности сессий, p95 latency backend и исключениям в хендлерах.
+- Grafana дашборды: `docs/monitoring/gateway-grafana-dashboard.json` визуализирует активные сессии/потоки, скорость handshake по результатам, upstream ошибки, трафик и p95 длительность сессий; `docs/monitoring/backend-grafana-dashboard.json` показывает in-flight запросы, RPS по роутам, p95 latency, 5xx rate и исключения.

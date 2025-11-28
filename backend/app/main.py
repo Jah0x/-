@@ -5,6 +5,8 @@ from app.api.v1 import router as v1_router
 from app.api import internal as internal_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
+from app.core.metrics import MetricsMiddleware, setup_metrics_router
+from app.core.tracing import RequestContextMiddleware
 from app.services.outline_health_service import start_outline_healthcheck_background
 
 settings = get_settings()
@@ -24,5 +26,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(RequestContextMiddleware)
+app.add_middleware(MetricsMiddleware)
 app.include_router(v1_router)
 app.include_router(internal_router.router)
+app.include_router(setup_metrics_router())

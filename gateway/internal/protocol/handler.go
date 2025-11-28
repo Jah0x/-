@@ -30,6 +30,8 @@ type Handler struct {
 func (h *Handler) Handle(ctx context.Context, conn *websocket.Conn) {
 	var session *sessions.Session
 	handshakeStart := time.Now()
+	sessionStart := time.Time{}
+	handshakeResult := "transport_error"
 	defer func() {
 		if session != nil {
 			for streamID := range session.Streams {
@@ -39,7 +41,15 @@ func (h *Handler) Handle(ctx context.Context, conn *websocket.Conn) {
 			if h.Metrics != nil && h.Metrics.MetricsEnabled {
 				h.Metrics.ActiveSessions.Set(float64(h.Sessions.ActiveSessions()))
 				h.Metrics.ActiveStreams.Set(float64(h.Sessions.ActiveStreams()))
+				if !sessionStart.IsZero() {
+					h.Metrics.SessionDuration.Observe(time.Since(sessionStart).Seconds())
+				}
 			}
+		}
+		if h.Metrics != nil && h.Metrics.MetricsEnabled {
+			h.Metrics.HandshakeDuration.Observe(time.Since(handshakeStart).Seconds())
+			h.Metrics.HandshakeTotal.WithLabelValues(handshakeResult).Inc()
+			h.Metrics.ConnectionsTotal.WithLabelValues(handshakeResult).Inc()
 		}
 		conn.Close()
 	}()
@@ -49,50 +59,56 @@ func (h *Handler) Handle(ctx context.Context, conn *websocket.Conn) {
 	}
 	var env Envelope
 	if err := json.Unmarshal(helloData, &env); err != nil || env.Type != FrameHello {
+		handshakeResult = "bad_hello"
 		h.sendError(conn, "bad_hello", "invalid hello")
 		return
 	}
 	var hello HelloFrame
 	if err := json.Unmarshal(helloData, &hello); err != nil {
+		handshakeResult = "bad_hello"
 		h.sendError(conn, "bad_hello", "invalid hello")
 		return
 	}
 	if hello.Version == "" {
+		handshakeResult = "bad_hello"
 		h.sendError(conn, "bad_hello", "missing version")
 		return
 	}
 	if h.Version != "" && hello.Version != h.Version {
+		handshakeResult = "bad_version"
 		h.sendError(conn, "bad_version", "unsupported version")
 		return
 	}
 	validation, authErr := h.Validator.ValidateSession(ctx, hello.SessionToken)
-	duration := time.Since(handshakeStart).Seconds()
-	if h.Metrics != nil && h.Metrics.MetricsEnabled {
-		h.Metrics.HandshakeDuration.Observe(duration)
-	}
 	if authErr != nil {
 		if h.Metrics != nil && h.Metrics.MetricsEnabled {
-			h.Metrics.HandshakeTotal.WithLabelValues("error").Inc()
 			h.Metrics.BackendErrors.WithLabelValues("auth_error").Inc()
 		}
+		handshakeResult = "auth_error"
 		h.sendError(conn, "auth_failed", authErr.Error())
 		return
 	}
 	session, err = h.Sessions.CreateSessionWithID(validation.SessionID, validation.DeviceID, validation.MaxStreams)
 	if err != nil {
+		handshakeResult = "session_error"
 		h.sendError(conn, "session_error", "failed to create session")
 		return
 	}
+	sessionStart = time.Now()
 	defer h.Upstream.UnbindSession(ctx, session.ID)
 	nodeConfig := upstream.OutlineNodeConfig{NodeID: validation.Outline.NodeID, Host: validation.Outline.Host, Port: validation.Outline.Port, Method: validation.Outline.Method, Password: validation.Outline.Password, Region: validation.Outline.Region, Pool: validation.Outline.Pool, AccessKeyID: validation.Outline.AccessKeyID, AccessURL: validation.Outline.AccessURL}
 	if err := h.Upstream.BindSession(ctx, session.ID, nodeConfig); err != nil {
+		handshakeResult = "upstream_error"
+		if h.Metrics != nil && h.Metrics.MetricsEnabled {
+			h.Metrics.UpstreamErrors.WithLabelValues("bind").Inc()
+		}
 		h.sendError(conn, "session_error", "failed to bind upstream")
 		return
 	}
 	if h.Metrics != nil && h.Metrics.MetricsEnabled {
 		h.Metrics.ActiveSessions.Set(float64(h.Sessions.ActiveSessions()))
-		h.Metrics.HandshakeTotal.WithLabelValues("accepted").Inc()
 	}
+	handshakeResult = "accepted"
 	if h.Logger != nil {
 		h.Logger.Info("session_started", slog.String("device_id", session.DeviceID), slog.String("session_id", session.ID), slog.String("region", nodeConfig.Region), slog.Int("node_id", nodeConfig.NodeID))
 	}
@@ -104,6 +120,10 @@ func (h *Handler) Handle(ctx context.Context, conn *websocket.Conn) {
 		}
 		var envelope Envelope
 		if err := json.Unmarshal(data, &envelope); err != nil {
+			if h.Metrics != nil && h.Metrics.MetricsEnabled {
+				h.Metrics.StreamErrors.WithLabelValues("bad_envelope").Inc()
+				h.Metrics.ConnectionsTotal.WithLabelValues("protocol_error").Inc()
+			}
 			h.sendError(conn, "bad_frame", "invalid frame")
 			continue
 		}
@@ -111,28 +131,45 @@ func (h *Handler) Handle(ctx context.Context, conn *websocket.Conn) {
 		case FrameStreamOpen:
 			var frame StreamOpenFrame
 			if err := json.Unmarshal(data, &frame); err != nil || frame.StreamID == "" {
+				if h.Metrics != nil && h.Metrics.MetricsEnabled {
+					h.Metrics.StreamErrors.WithLabelValues("bad_stream_open").Inc()
+				}
 				h.sendError(conn, "bad_stream", "invalid stream_open")
 				continue
 			}
 			if err := h.Sessions.OpenStream(session.ID, frame.StreamID); err != nil {
+				if h.Metrics != nil && h.Metrics.MetricsEnabled {
+					h.Metrics.StreamOpenTotal.WithLabelValues("limit_exceeded").Inc()
+				}
 				h.sendError(conn, "stream_error", err.Error())
 				continue
 			}
 			if err := h.Upstream.OpenStream(ctx, session.ID, frame.StreamID); err != nil {
+				if h.Metrics != nil && h.Metrics.MetricsEnabled {
+					h.Metrics.UpstreamErrors.WithLabelValues("open_stream").Inc()
+					h.Metrics.StreamOpenTotal.WithLabelValues("upstream_error").Inc()
+				}
 				h.sendError(conn, "stream_error", err.Error())
 				continue
 			}
 			if h.Metrics != nil && h.Metrics.MetricsEnabled {
 				h.Metrics.ActiveStreams.Set(float64(h.Sessions.ActiveStreams()))
+				h.Metrics.StreamOpenTotal.WithLabelValues("opened").Inc()
 			}
 		case FrameStreamData:
 			var frame StreamDataFrame
 			if err := json.Unmarshal(data, &frame); err != nil || frame.StreamID == "" {
+				if h.Metrics != nil && h.Metrics.MetricsEnabled {
+					h.Metrics.StreamErrors.WithLabelValues("bad_stream_data").Inc()
+				}
 				h.sendError(conn, "bad_stream", "invalid stream_data")
 				continue
 			}
 			payload, err := base64.StdEncoding.DecodeString(frame.Data)
 			if err != nil {
+				if h.Metrics != nil && h.Metrics.MetricsEnabled {
+					h.Metrics.StreamErrors.WithLabelValues("decode_error").Inc()
+				}
 				h.sendError(conn, "bad_stream", "invalid data encoding")
 				continue
 			}
@@ -141,6 +178,10 @@ func (h *Handler) Handle(ctx context.Context, conn *websocket.Conn) {
 			}
 			response, err := h.Upstream.Write(ctx, session.ID, frame.StreamID, payload)
 			if err != nil {
+				if h.Metrics != nil && h.Metrics.MetricsEnabled {
+					h.Metrics.UpstreamErrors.WithLabelValues("write").Inc()
+					h.Metrics.StreamErrors.WithLabelValues("upstream_write").Inc()
+				}
 				h.sendError(conn, "stream_error", err.Error())
 				continue
 			}
@@ -153,6 +194,9 @@ func (h *Handler) Handle(ctx context.Context, conn *websocket.Conn) {
 		case FrameStreamClose:
 			var frame StreamCloseFrame
 			if err := json.Unmarshal(data, &frame); err != nil || frame.StreamID == "" {
+				if h.Metrics != nil && h.Metrics.MetricsEnabled {
+					h.Metrics.StreamErrors.WithLabelValues("bad_stream_close").Inc()
+				}
 				h.sendError(conn, "bad_stream", "invalid stream_close")
 				continue
 			}
@@ -160,10 +204,14 @@ func (h *Handler) Handle(ctx context.Context, conn *websocket.Conn) {
 			h.Sessions.CloseStream(session.ID, frame.StreamID)
 			if h.Metrics != nil && h.Metrics.MetricsEnabled {
 				h.Metrics.ActiveStreams.Set(float64(h.Sessions.ActiveStreams()))
+				h.Metrics.StreamCloseTotal.Inc()
 			}
 		case FramePing:
 			h.sendFrame(conn, Envelope{Type: FramePong})
 		default:
+			if h.Metrics != nil && h.Metrics.MetricsEnabled {
+				h.Metrics.StreamErrors.WithLabelValues("unsupported_frame").Inc()
+			}
 			h.sendError(conn, "unsupported", "unsupported frame type")
 		}
 	}

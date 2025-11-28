@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     port: int = Field(default=8000, alias="BACKEND_PORT")
     jwt_algorithm: str = Field(default="HS256", alias="JWT_ALGORITHM")
     jwt_expire_minutes: int = Field(default=60, alias="JWT_EXPIRE_MINUTES")
+    outline_healthcheck_interval_seconds: int = Field(default=60, alias="OUTLINE_HEALTHCHECK_INTERVAL_SECONDS")
+    outline_healthcheck_timeout_seconds: float = Field(default=5.0, alias="OUTLINE_HEALTHCHECK_TIMEOUT_SECONDS")
+    outline_healthcheck_degraded_threshold_ms: int = Field(default=1500, alias="OUTLINE_HEALTHCHECK_DEGRADED_THRESHOLD_MS")
 
 
 @lru_cache

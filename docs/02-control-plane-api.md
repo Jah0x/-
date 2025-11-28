@@ -1,22 +1,36 @@
 # Control Plane API
 
-## Principles
-- REST/JSON over HTTPS; versioned under `/api/v1/`.
-- Auth via backend-issued tokens (JWT or equivalent) attached as Authorization headers.
-- All responses include structured error codes; rate limiting and audit logging applied on sensitive endpoints.
+## Базовые принципы
+- REST/JSON, версионирование под `/api/v1`.
+- Авторизация устройств через JWT-токены, выпускаемые backend.
+- Все ответы содержат предсказуемые структуры успеха/ошибок.
 
-## Public client endpoints (baseline)
-- `POST /api/v1/auth/validate-device` — validate device token/subscription, return device status and allowed regions.
-- `POST /api/v1/nodes/assign-outline` — request Outline node for a device/region; returns node endpoint and access parameters.
-- `POST /api/v1/usage/report` — submit usage counters (bytes up/down, session info) per device/session.
+## Маршруты
+### GET /api/v1/health
+Возвращает `{ "status": "ok" }` для проверки доступности.
 
-## Technical endpoints (gateway/Outline heartbeats)
-- `POST /api/v1/gateway/heartbeat` — gateway health payload (node_id, region, uptime, active_sessions, load, traffic counters).
-- `POST /api/v1/outline/heartbeat` — Outline node health payload with similar schema; used for pool health and selection.
+### POST /api/v1/auth/validate-device
+- Вход: `{ "device_id": "string", "token": "jwt" }`
+- Логика: проверка токена, поиск устройства, проверка активной подписки.
+- Успех: `{ "allowed": true, "user_id": int, "subscription_status": "active" }`
+- Ошибка: HTTP 403 с `{ "allowed": false, "reason": "..." }`
 
-## Administrative endpoints (draft for Stage 8)
-- User and subscription management: CRUD for users, plans, subscriptions, device bindings.
-- Node and region management: CRUD for gateway nodes, Outline nodes, regions, weights, and tags.
-- RBAC and audit: manage roles (`admin`, `support`, `read-only`), list audit events, rotate credentials.
-- Configuration helpers: import/export settings, trigger key rotation for Outline access keys.
+### POST /api/v1/nodes/assign-outline
+- Вход: `{ "device_id": "string", "region_code": "string|null" }`
+- Сейчас возвращает статический узел для разработки: `{ "host": "outline.example.com", "port": 12345, "method": "aes-256-gcm", "password": "placeholder", "region": "<region_code>" }`
 
+### POST /api/v1/usage/report
+- Вход: `{ "session_id": int|null, "device_id": "string", "bytes_up": int, "bytes_down": int }`
+- Выход: `{ "status": "accepted" }`
+
+### POST /api/v1/gateway/heartbeat
+- Вход: `{ "node_id": int|null, "region": "string|null", "status": "string|null" }`
+- Выход: `{ "status": "ok" }`
+
+### POST /api/v1/outline/heartbeat
+- Вход: `{ "node_id": int|null, "region": "string|null", "status": "string|null" }`
+- Выход: `{ "status": "ok" }`
+
+## Модели данных
+- Пользователи, устройства, планы, подписки, регионы, gateway/outline-ноды, сессии — описаны в SQLAlchemy-моделях backend.
+- Первая миграция Alembic создаёт все таблицы и базовые поля для дальнейших этапов.

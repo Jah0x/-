@@ -11,6 +11,7 @@ from app.models.outline_access_key import OutlineAccessKey
 from app.models.outline_pool import OutlinePool
 from app.models.outline_pool_node import OutlinePoolNode
 from app.models.outline_pool_region import OutlinePoolRegion
+from app.models.admin_audit_log import AdminAuditLog
 
 __all__ = [
     "Base",
@@ -27,4 +28,5 @@ __all__ = [
     "OutlinePool",
     "OutlinePoolNode",
     "OutlinePoolRegion",
+    "AdminAuditLog",
 ]

@@ -1,27 +1,14 @@
-from pydantic import BaseModel
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.database import get_session
 from app.schemas.usage import UsageReport
-
-
-class Heartbeat(BaseModel):
-    node_id: int | None = None
-    region: str | None = None
-    status: str | None = None
+from app.services.sessions_service import apply_usage
 
 
 router = APIRouter()
 
 
 @router.post("/usage/report")
-async def report_usage(body: UsageReport):
+async def report_usage(body: UsageReport, session: AsyncSession = Depends(get_session)):
+    await apply_usage(session, body.session_id, body.bytes_up, body.bytes_down)
     return {"status": "accepted"}
-
-
-@router.post("/gateway/heartbeat")
-async def gateway_heartbeat(payload: Heartbeat):
-    return {"status": "ok"}
-
-
-@router.post("/outline/heartbeat")
-async def outline_heartbeat(payload: Heartbeat):
-    return {"status": "ok"}

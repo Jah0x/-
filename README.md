@@ -10,7 +10,8 @@ HTTVPS обеспечивает туннель поверх HTTPS (WebSocket/HTT
 ## Быстрый старт через docker-compose
 1. Скопируйте `.env.example` в `.env` и при необходимости измените параметры.
 2. Запустите окружение: `make up` (поднимет PostgreSQL и backend).
-3. Логи сервисов: `make logs`.
-4. Остановить окружение: `make down`.
+3. Примените миграции в контейнере backend: `docker-compose exec backend alembic upgrade head`.
+4. Логи сервисов: `make logs`.
+5. Остановить окружение: `make down`.
 
-Backend поднимается на `${BACKEND_PORT}` и использует PostgreSQL на `${POSTGRES_PORT}`.
+Backend поднимается на `${BACKEND_PORT}` и использует PostgreSQL на `${POSTGRES_PORT}`. Основные переменные задаются в `.env`: параметры Postgres (`POSTGRES_*`), строка подключения backend (`BACKEND_DB_DSN`), секретный ключ и настройки JWT.

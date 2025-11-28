@@ -11,5 +11,8 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
     devices: Mapped[list["Device"]] = relationship("Device", back_populates="user")
     subscriptions: Mapped[list["Subscription"]] = relationship("Subscription", back_populates="user")

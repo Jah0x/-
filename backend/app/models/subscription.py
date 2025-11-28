@@ -20,5 +20,8 @@ class Subscription(Base):
     valid_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(32), nullable=False, default=SubscriptionStatus.inactive.value)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
     user: Mapped["User"] = relationship("User", back_populates="subscriptions")
     plan: Mapped["Plan"] = relationship("Plan", back_populates="subscriptions")

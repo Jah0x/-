@@ -1,25 +1,31 @@
 # Gateway Design
 
-## Architecture
-- **Acceptor:** TLS termination and WebSocket/HTTP/2 upgrade handling.
-- **Auth layer:** processes hello frames, validates device tokens via backend `/auth/validate-device`.
-- **Session manager:** tracks HTTVPS sessions and multiplexed streams, enforces limits and timeouts.
-- **Outline client:** maintains connections to assigned Outline nodes (Shadowsocks), handles failover/fallback.
-- **Metrics/logging:** structured JSON logs and Prometheus metrics for handshakes, streams, and Outline connectivity.
+## Архитектура
+- Transport: TLS-терминатор и WebSocket upgrade на `/ws`, обработка ping/pong и отключений.
+- Auth layer: приём `hello`, вызов backend `/api/v1/auth/validate-device`, возврат `auth_result`.
+- Session manager: in-memory учёт сессий и потоков, лимит `GATEWAY_MAX_STREAMS`, очистка при обрывах.
+- Upstream: в MVP `FakeUpstream` (echo/blackhole), интерфейс совместим с будущим Outline-клиентом.
+- Metrics/logging: Prometheus метрики и slog JSON/Text логи.
 
-## Session lifecycle
-1. Client establishes TLS and initiates hello.
-2. Gateway validates device with backend, obtains or confirms Outline node assignment.
-3. Session is created with stream window/configuration; metrics counters start.
-4. Client opens `stream_open`; gateway maps to Outline connection; forwards `stream_data` bidirectionally.
-5. On `stream_close` or errors, gateway tears down mappings, updates usage counters, and reports as needed.
-6. Gateway periodically sends usage reports and heartbeats to backend.
+## Сетевые маршруты
+- `/ws`: WebSocket с кадрами `hello`, `stream_open`, `stream_data` (base64), `stream_close`, `ping/pong`, `error`.
+- `/metrics`: promhttp handler при включённом `GATEWAY_METRICS_ENABLED`.
 
-## WebSocket/HTTP2 handling
-- Initial implementation may use WebSocket framing with JSON; HTTP/2 data frames supported where deployment requires.
-- Binary framing is a later optimization; message definitions stay aligned with `docs/03-httvps-protocol.md`.
-- Keep-alives via ping/pong; timeouts trigger session cleanup.
+## Сессии и потоки
+- На успешный `hello` создаётся `session_id`, сохраняется device_id и пустой набор потоков.
+- `stream_open` резервирует поток в `sessions.Manager` и проксируется в upstream.
+- `stream_data` передаётся в upstream; эхо-ответ возвращается как `stream_data` клиенту.
+- `stream_close` освобождает поток; закрытие WebSocket очищает все связанные потоки и сессию.
 
-## Logging and metrics
-- **Logs:** JSON with `request_id`, `session_id`, `device_id`, `node_id`, result codes, byte counters, timing.
-- **Metrics:** Prometheus counters/gauges/histograms for connections, auth outcomes, active streams, bytes in/out, Outline latency/errors, heartbeat status.
+## Интеграция с backend
+- Клиент `internal/auth.Client` обращается к `POST /api/v1/auth/validate-device` с полями `device_id`, `token`.
+- Ответ backend парсится в `ValidateDeviceResult` с `allowed`, `user_id`, `subscription_status`, `reason`.
+- Ошибки/отказы фиксируются в метриках `httvps_gateway_handshakes_total` и `httvps_gateway_backend_errors_total`.
+
+## Конфигурация
+- Источники: env или YAML (`config/example-config.yaml`).
+- Ключевые параметры: `GATEWAY_LISTEN_ADDR`, `GATEWAY_TLS_CERT_PATH`, `GATEWAY_TLS_KEY_PATH`, `BACKEND_BASE_URL`, `BACKEND_TIMEOUT`, `GATEWAY_LOG_LEVEL`, `GATEWAY_LOG_FORMAT`, `GATEWAY_METRICS_ENABLED`, `GATEWAY_METRICS_PATH`, `GATEWAY_MAX_STREAMS`.
+
+## Метрики и логи
+- Метрики: активные сессии/потоки, handshakes (accepted/rejected/error), длительность handshake, ошибки backend, трафик bytes_in/bytes_out.
+- Логи: JSON/Text через slog, поля минимум `device_id`, `session_id`, событие (`session_started`, ошибки потоков), уровень настраивается из конфигурации.

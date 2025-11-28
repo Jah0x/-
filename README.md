@@ -9,9 +9,40 @@ HTTVPS обеспечивает туннель поверх HTTPS (WebSocket/HTT
 
 ## Быстрый старт через docker-compose
 1. Скопируйте `.env.example` в `.env` и при необходимости измените параметры.
-2. Запустите окружение: `make up` (поднимет PostgreSQL и backend).
+2. Запустите окружение: `make up` (поднимет PostgreSQL, backend и gateway).
 3. Примените миграции в контейнере backend: `docker-compose exec backend alembic upgrade head`.
 4. Логи сервисов: `make logs`.
 5. Остановить окружение: `make down`.
 
-Backend поднимается на `${BACKEND_PORT}` и использует PostgreSQL на `${POSTGRES_PORT}`. Основные переменные задаются в `.env`: параметры Postgres (`POSTGRES_*`), строка подключения backend (`BACKEND_DB_DSN`), секретный ключ и настройки JWT.
+Backend поднимается на `${BACKEND_PORT}` и использует PostgreSQL на `${POSTGRES_PORT}`. Gateway слушает `${GATEWAY_LISTEN_ADDR}` с TLS-сертификатами из `deploy/certs`.
+
+## Gateway (MVP)
+- HTTPS + WebSocket-туннель, JSON-фреймы по спецификации из `docs/03-httvps-protocol.md`.
+- Handshake через кадр `hello` и валидацию устройства в backend.
+- Поддержка кадров `stream_open` / `stream_data` / `stream_close`, эхо-upstream для разработки.
+- Метрики Prometheus на `/metrics` при включённом флаге.
+
+### Ручная проверка соединения
+1. Поднимите сервисы: `make up` и примените миграции.
+2. Подготовьте токен устройства через backend (используйте уже существующий эндпоинт `/api/v1/auth/validate-device`).
+3. Подключитесь WebSocket-клиентом к `wss://localhost:8443/ws` с отключённой проверкой сертификата (например, `npx wscat --no-check -c wss://localhost:8443/ws`).
+4. Отправьте `hello`:
+   ```json
+   {"type":"hello","device_id":"<device>","token":"<token>","client_version":"1.0"}
+   ```
+5. После `auth_result` отправьте:
+   ```json
+   {"type":"stream_open","stream_id":"s1"}
+   {"type":"stream_data","stream_id":"s1","data":"aGVsbG8="}
+   ```
+   В ответ придёт эхо `stream_data` с тем же `data`.
+
+## Документация
+Полный набор спецификаций расположен в `docs/*.md`, включая протокол, архитектуру и дорожную карту разработки.
+
+## Дорожная карта
+- Stage 0: инициализация репозитория (структура, окружение, базовые правила).
+- Stage 1: backend MVP (контрол-плейн, БД, аутентификация устройств).
+- Stage 2: gateway MVP (WebSocket-туннель, заглушка upstream, метрики).
+
+Подробнее: [docs/00-dev-plan.md](docs/00-dev-plan.md).

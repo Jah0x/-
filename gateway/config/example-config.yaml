@@ -1,0 +1,10 @@
+listen_addr: ":8443"
+tls_cert_path: "deploy/certs/gateway-cert.pem"
+tls_key_path: "deploy/certs/gateway-key.pem"
+backend_base_url: "http://backend:8000"
+backend_timeout: 5s
+log_level: "info"
+log_format: "json"
+metrics_enabled: true
+metrics_path: "/metrics"
+max_streams_per_session: 8
